@@ -1,0 +1,8 @@
+prefix=/home/wa/inspection/3D_motion_planner/motion_planner/devel
+
+Name: plan_env
+Description: Description of plan_env
+Version: 0.0.0
+Cflags: -I/home/wa/inspection/3D_motion_planner/motion_planner/src/scan_planner/planner/plan_env/include
+Libs: -L${prefix}/lib -lplan_env
+Requires: roscpp std_msgs tf

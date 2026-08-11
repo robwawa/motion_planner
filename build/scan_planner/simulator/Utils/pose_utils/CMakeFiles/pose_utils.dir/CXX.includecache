@@ -1,0 +1,18 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/wa/inspection/3D_motion_planner/motion_planner/src/scan_planner/simulator/Utils/pose_utils/include/pose_utils.h
+iostream
+-
+armadillo
+/home/wa/inspection/3D_motion_planner/motion_planner/src/scan_planner/simulator/Utils/pose_utils/include/armadillo
+
+/home/wa/inspection/3D_motion_planner/motion_planner/src/scan_planner/simulator/Utils/pose_utils/src/pose_utils.cpp
+pose_utils.h
+/home/wa/inspection/3D_motion_planner/motion_planner/src/scan_planner/simulator/Utils/pose_utils/src/pose_utils.h
+

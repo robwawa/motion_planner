@@ -1,0 +1,20 @@
+<launch>
+  <arg name="scene" default="Building" doc="Spiral, Building, or Plaza" />
+  <arg name="backend" default="auto" doc="auto, cpu, or cuda" />
+  <arg name="wait_timeout" default="300.0" />
+  <arg name="launch_rviz" default="true" />
+
+  <include file="$(find pct_planner)/launch/tomography.launch">
+    <arg name="scene" value="$(arg scene)" />
+    <arg name="backend" value="$(arg backend)" />
+  </include>
+
+  <include file="$(find pct_planner)/launch/planner.launch">
+    <arg name="scene" value="$(arg scene)" />
+    <arg name="wait_timeout" value="$(arg wait_timeout)" />
+  </include>
+
+  <node if="$(arg launch_rviz)" pkg="rviz" type="rviz"
+        name="pct_rviz" args="-d $(find pct_planner)/rsc/rviz/pct_ros.rviz"
+        output="screen" />
+</launch>

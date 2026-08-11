@@ -1,0 +1,8 @@
+<launch>
+  <arg name="scene" default="Building" doc="Spiral, Building, or Plaza" />
+  <arg name="backend" default="auto" doc="auto, cpu, or cuda" />
+
+  <node pkg="pct_planner" type="pct_tomography_node.py"
+        name="pointcloud_tomography" output="screen"
+        args="--scene $(arg scene) --backend $(arg backend)" />
+</launch>
