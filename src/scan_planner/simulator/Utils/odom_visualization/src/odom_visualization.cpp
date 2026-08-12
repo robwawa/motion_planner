@@ -81,7 +81,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   // Pose
   poseROS.header = msg->header;
   poseROS.header.stamp = msg->header.stamp;
-  poseROS.header.frame_id = string("world");
+  poseROS.header.frame_id = _frame_id;
   poseROS.pose.position.x = pose(0);
   poseROS.pose.position.y = pose(1);
   poseROS.pose.position.z = pose(2);
@@ -98,7 +98,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   yprVel(1) = -atan2(vel(2), norm(vel.rows(0,1),2));
   yprVel(2) = 0;
   q = R_to_quaternion(ypr_to_R(yprVel));    
-  velROS.header.frame_id = string("world");
+  velROS.header.frame_id = _frame_id;
   velROS.header.stamp = msg->header.stamp;
   velROS.ns = string("velocity");
   velROS.id = 0;
@@ -175,7 +175,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
         }
       }
     }
-    covROS.header.frame_id = string("world");
+    covROS.header.frame_id = _frame_id;
     covROS.header.stamp = msg->header.stamp;
     covROS.ns = string("covariance");
     covROS.id = 0;
@@ -224,7 +224,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
         }
       }
     }
-    covVelROS.header.frame_id = string("world");
+    covVelROS.header.frame_id = _frame_id;
     covVelROS.header.stamp = msg->header.stamp;
     covVelROS.ns = string("covariance_velocity");
     covVelROS.id = 0;
@@ -254,7 +254,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   ros::Time t = msg->header.stamp;
   if ((t - pt).toSec() > 0.5)
   {
-    trajROS.header.frame_id = string("world");
+    trajROS.header.frame_id = _frame_id;
     trajROS.header.stamp    = ros::Time::now();
     trajROS.ns              = string("trajectory");
     trajROS.type            = visualization_msgs::Marker::LINE_LIST;
@@ -295,7 +295,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
   }
 
   // Sensor availability
-  sensorROS.header.frame_id = string("world");
+  sensorROS.header.frame_id = _frame_id;
   sensorROS.header.stamp    = msg->header.stamp;
   sensorROS.ns              = string("sensor");
   sensorROS.type            = visualization_msgs::Marker::TEXT_VIEW_FACING;
@@ -385,7 +385,10 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
     transform90.setRotation(tf::Quaternion(q90(1), q90(2), q90(3), q90(0)));  
 
     const ros::Time tf_stamp = ros::Time::now();
-    broadcaster->sendTransform(tf::StampedTransform(transform,   tf_stamp, string("world"),  string("base")));      
+    // Keep the robot model in the same navigation frame as the map and paths.
+    // The previous hard-coded `world` parent disconnected the URDF tree from
+    // RViz when the navigation stack used `map` as its fixed frame.
+    broadcaster->sendTransform(tf::StampedTransform(transform,   tf_stamp, _frame_id,  string("base")));      
     broadcaster->sendTransform(tf::StampedTransform(transform45, tf_stamp, string("base"), string("laser")));          
     broadcaster->sendTransform(tf::StampedTransform(transform45, tf_stamp, string("base"), string("vision")));          
     broadcaster->sendTransform(tf::StampedTransform(transform90, tf_stamp, string("base"), string("height")));          

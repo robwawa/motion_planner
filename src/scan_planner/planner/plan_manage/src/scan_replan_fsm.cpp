@@ -2,9 +2,90 @@
 #include <plan_manage/scan_replan_fsm.h>
 #include <cmath>
 #include <cstdlib>
+#include <tf/transform_datatypes.h>
 
 namespace
 {
+  double pointToSegmentDistance(const Eigen::Vector3d &point,
+                                const Eigen::Vector3d &segment_start,
+                                const Eigen::Vector3d &segment_end)
+  {
+    const Eigen::Vector3d segment = segment_end - segment_start;
+    const double segment_squared_length = segment.squaredNorm();
+    if (segment_squared_length < 1e-12)
+      return (point - segment_start).norm();
+
+    const double projection = std::max(0.0, std::min(1.0,
+        (point - segment_start).dot(segment) / segment_squared_length));
+    return (point - (segment_start + projection * segment)).norm();
+  }
+
+  void simplifyPathRdp(const std::vector<Eigen::Vector3d> &input,
+                       const size_t first, const size_t last,
+                       const double tolerance,
+                       std::vector<bool> &keep)
+  {
+    if (last <= first + 1)
+      return;
+
+    double max_distance = -1.0;
+    size_t split = first;
+    for (size_t i = first + 1; i < last; ++i)
+    {
+      const double distance = pointToSegmentDistance(input[i], input[first], input[last]);
+      if (distance > max_distance)
+      {
+        max_distance = distance;
+        split = i;
+      }
+    }
+
+    if (max_distance > tolerance)
+    {
+      keep[split] = true;
+      simplifyPathRdp(input, first, split, tolerance, keep);
+      simplifyPathRdp(input, split, last, tolerance, keep);
+    }
+  }
+
+  std::vector<Eigen::Vector3d> preprocessReferencePath(
+      const std::vector<Eigen::Vector3d> &input,
+      const double min_distance,
+      const double simplify_tolerance)
+  {
+    if (input.empty())
+      return {};
+
+    std::vector<Eigen::Vector3d> distance_filtered;
+    distance_filtered.reserve(input.size());
+    distance_filtered.push_back(input.front());
+    for (size_t i = 1; i < input.size(); ++i)
+    {
+      if ((input[i] - distance_filtered.back()).norm() >= min_distance)
+        distance_filtered.push_back(input[i]);
+    }
+    if ((distance_filtered.back() - input.back()).norm() > 1e-6)
+      distance_filtered.push_back(input.back());
+
+    if (distance_filtered.size() < 3 || simplify_tolerance <= 0.0)
+      return distance_filtered;
+
+    std::vector<bool> keep(distance_filtered.size(), false);
+    keep.front() = true;
+    keep.back() = true;
+    simplifyPathRdp(distance_filtered, 0, distance_filtered.size() - 1,
+                    simplify_tolerance, keep);
+
+    std::vector<Eigen::Vector3d> output;
+    output.reserve(distance_filtered.size());
+    for (size_t i = 0; i < distance_filtered.size(); ++i)
+    {
+      if (keep[i])
+        output.push_back(distance_filtered[i]);
+    }
+    return output;
+  }
+
   std::string shellQuote(const std::string &value)
   {
     std::string quoted = "'";
@@ -51,7 +132,25 @@ namespace scan_planner
     nh.param("grid_map/double_cylinder_radius", self_double_cylinder_radius_, 0.0);
     nh.param("grid_map/double_cylinder_offset", self_double_cylinder_offset_, 0.0);
     nh.param("grid_map/body_height", body_height_, 0.0);
+    nh.param("fsm/reference_path_min_distance", reference_path_min_distance_, 0.5);
+    nh.param("fsm/reference_path_simplify_tolerance", reference_path_simplify_tolerance_, 0.15);
+    nh.param("fsm/reference_path_topic", reference_path_topic_, std::string("/initial_path"));
+    nh.param("fsm/reference_path_z_mode", reference_path_z_mode_, std::string("base"));
     nh.param("grid_map/frame_id", self_inflation_frame_id_, std::string("world"));
+
+    if (reference_path_z_mode_ != "base" && reference_path_z_mode_ != "ground")
+    {
+      ROS_ERROR("[SCANReplanFSM] fsm/reference_path_z_mode must be 'base' or 'ground', got '%s'.",
+                reference_path_z_mode_.c_str());
+      ros::shutdown();
+      return;
+    }
+    if (reference_path_min_distance_ < 0.0 || reference_path_simplify_tolerance_ < 0.0)
+    {
+      ROS_ERROR("[SCANReplanFSM] Reference-path preprocessing distances must be non-negative.");
+      ros::shutdown();
+      return;
+    }
 
     if (navi_mode_ == NAVI_MODE::PRESET_TARGET)
     {
@@ -110,7 +209,7 @@ namespace scan_planner
       planGlobalTrajbyGivenWps();
     }
     else if (navi_mode_ == NAVI_MODE::REFERENCE_PATH)
-      path_sub_ = nh.subscribe("/initial_path", 1, &SCANReplanFSM::pathCallback, this);
+      path_sub_ = nh.subscribe(reference_path_topic_, 1, &SCANReplanFSM::pathCallback, this);
     else
       cout << "Wrong navi_mode_ value! navi_mode_=" << navi_mode_ << endl;
   }
@@ -369,33 +468,46 @@ namespace scan_planner
     }
 
     trigger_ = true;
+    const double z_offset = reference_path_z_mode_ == "ground" ? body_height_ : 0.0;
     end_pt_ << msg->poses.back().pose.position.x,
         msg->poses.back().pose.position.y,
-        msg->poses.back().pose.position.z + body_height_;
+        msg->poses.back().pose.position.z + z_offset;
+    const auto &final_orientation = msg->poses.back().pose.orientation;
+    const double q_norm = std::sqrt(final_orientation.x * final_orientation.x +
+                                    final_orientation.y * final_orientation.y +
+                                    final_orientation.z * final_orientation.z +
+                                    final_orientation.w * final_orientation.w);
+    have_final_yaw_ = q_norm > 1e-6;
+    if (have_final_yaw_)
+      final_yaw_ = tf::getYaw(final_orientation);
 
-    std::vector<Eigen::Vector3d> waypoints;
-    waypoints.reserve(msg->poses.size());
-    constexpr double min_dist = 0.5;
-    Eigen::Vector3d last_wp;
-    bool first = true;
+    std::vector<Eigen::Vector3d> raw_waypoints;
+    raw_waypoints.reserve(msg->poses.size());
 
     for (const auto &pose_stamped : msg->poses)
     {
       Eigen::Vector3d wp;
       wp(0) = pose_stamped.pose.position.x;
       wp(1) = pose_stamped.pose.position.y;
-      wp(2) = pose_stamped.pose.position.z + body_height_;
+      wp(2) = pose_stamped.pose.position.z + z_offset;
 
-      if (first || (wp - last_wp).norm() >= min_dist)
-      {
-        waypoints.push_back(wp);
-        last_wp = wp;
-        first = false;
-      }
+      raw_waypoints.push_back(wp);
     }
 
+    std::vector<Eigen::Vector3d> waypoints = preprocessReferencePath(
+        raw_waypoints, reference_path_min_distance_, reference_path_simplify_tolerance_);
     if ((waypoints.back() - end_pt_).norm() > 1e-6)
       waypoints.push_back(end_pt_);
+
+    // The first point of a route can be stale while the robot is moving.  The
+    // global reference must start at the measured pose, not at that stale point.
+    if ((waypoints.front() - odom_pos_).norm() < reference_path_min_distance_)
+      waypoints.front() = odom_pos_;
+    else
+      waypoints.insert(waypoints.begin(), odom_pos_);
+
+    ROS_INFO("[pathCallback] Reference path reduced from %zu poses to %zu trajectory waypoints.",
+             msg->poses.size(), waypoints.size());
 
     bool success = planGlobalTrajByWaypoints(waypoints);
 
@@ -926,6 +1038,17 @@ namespace scan_planner
         pt.z = pos_pts(2, i);
         bspline.pos_pts.push_back(pt);
       }
+
+      bspline.yaw_dt = 0.0;
+      bspline.yaw_pts.reserve(pos_pts.cols());
+      for (int i = 0; i < pos_pts.cols(); ++i)
+      {
+        const int next = std::min(i + 1, static_cast<int>(pos_pts.cols()) - 1);
+        const Eigen::Vector2d diff = pos_pts.col(next).head<2>() - pos_pts.col(i).head<2>();
+        bspline.yaw_pts.push_back(diff.squaredNorm() > 1e-8 ? std::atan2(diff.y(), diff.x()) : getOdomYaw());
+      }
+      if (have_final_yaw_ && !bspline.yaw_pts.empty())
+        bspline.yaw_pts.back() = final_yaw_;
 
       Eigen::VectorXd knots = info->position_traj_.getKnot();
       bspline.knots.reserve(knots.rows());

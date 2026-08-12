@@ -1,11 +1,19 @@
 <launch>
   <arg name="scene" default="Building" doc="Spiral, Building, or Plaza" />
   <arg name="wait_timeout" default="300.0" />
+  <arg name="optimize_path" default="true" doc="Publish optimized trajectory when true; raw A* path when false" />
+  <arg name="endpoint_snap_radius" default="1.5" doc="Maximum XY search radius (m) when projecting endpoints to traversable cells" />
 
   <node pkg="pct_planner" type="pct_planner_node.py"
         name="pct_planner" output="screen"
-        args="--scene $(arg scene) --wait-timeout $(arg wait_timeout)">
+        args="--scene $(arg scene)">
+    <param name="scene" value="$(arg scene)" />
+    <param name="navigation_frame" value="map" />
+    <param name="body_height" value="0.4" />
+    <param name="layer_height_tolerance" value="0.75" />
+    <param name="endpoint_snap_radius" value="$(arg endpoint_snap_radius)" />
+    <param name="optimize_path" value="$(arg optimize_path)" />
     <env name="LD_LIBRARY_PATH"
-         value="$(find pct_planner)/planner/lib/build/src/a_star:$(find pct_planner)/planner/lib/build/src/map_manager:$(find pct_planner)/planner/lib/build/src/trajectory_optimization:$(find pct_planner)/planner/lib/build/src/ele_planner:$(find pct_planner)/planner/lib/build/src/common/smoothing:$(find pct_planner)/planner/lib/3rdparty/gtsam-4.1.1/install/lib:$(optenv LD_LIBRARY_PATH)" />
+         value="$(find pct_planner)/planner/lib/build/src/a_star:$(find pct_planner)/planner/lib/build/src/map_manager:$(find pct_planner)/planner/lib/build/src/trajectory_optimization:$(find pct_planner)/planner/lib/build/src/ele_planner:$(find pct_planner)/planner/lib/build/src/common/smoothing:$(find pct_planner)/planner/lib/3rdparty/gtsam-4.1.1/install/lib:$(find pct_planner)/planner/lib/3rdparty/gtsam-4.1.1/build/gtsam/3rdparty/metis/libmetis:$(optenv LD_LIBRARY_PATH)" />
   </node>
 </launch>

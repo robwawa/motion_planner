@@ -19,6 +19,9 @@ namespace scan_planner
   {
   private:
     ros::NodeHandle node;
+    // Frame used by all planning visualization markers.  Keep this aligned
+    // with the map/localization frame configured by the navigation stack.
+    std::string frame_id_ = "map";
 
     ros::Publisher goal_point_pub;
     ros::Publisher global_list_pub;

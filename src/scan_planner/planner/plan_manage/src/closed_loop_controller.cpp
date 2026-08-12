@@ -45,7 +45,10 @@ double max_vx;
 double max_vy;
 double max_vyaw;
 double finish_dist;
+double finish_yaw_tolerance;
 std::string body_pose_topic;
+double terminal_yaw = 0.0;
+bool have_terminal_yaw = false;
 
 bool loadRequiredParam(const ros::NodeHandle &nh, const std::string &name, double &value)
 {
@@ -68,6 +71,7 @@ bool loadParams(const ros::NodeHandle &nh)
   ok &= loadRequiredParam(nh, "max_vy", max_vy);
   ok &= loadRequiredParam(nh, "max_vyaw", max_vyaw);
   ok &= loadRequiredParam(nh, "finish_dist", finish_dist);
+  nh.param("finish_yaw_tolerance", finish_yaw_tolerance, 0.15);
   if (ok && max_vyaw > kMaxVYawLimit)
   {
     ROS_WARN("[closed_loop_controller] cap max_vyaw %.3f to %.3f rad/s.", max_vyaw, kMaxVYawLimit);
@@ -100,6 +104,8 @@ Eigen::Vector2d clampNorm(const Eigen::Vector2d &value, double max_norm)
 
 double estimateDesiredYaw(double t_cur, const Eigen::Vector3d &pos_des)
 {
+  if (have_terminal_yaw && t_cur >= traj_duration - 1e-3)
+    return terminal_yaw;
   const double t_look = std::min(traj_duration, t_cur + time_forward);
   Eigen::Vector3d dir = traj[0].evaluateDeBoorT(t_look) - pos_des;
 
@@ -153,6 +159,9 @@ void bsplineCallback(const scan_planner::BsplineConstPtr &msg)
   traj.push_back(traj[1].getDerivative());
 
   traj_duration = traj[0].getTimeSum();
+  have_terminal_yaw = !msg->yaw_pts.empty();
+  if (have_terminal_yaw)
+    terminal_yaw = msg->yaw_pts.back();
   traj_id = msg->traj_id;
   exec_time = 0.0;
   last_update_time = ros::Time::now();
@@ -218,7 +227,8 @@ void cmdCallback(const ros::TimerEvent &)
   cmd.linear.y = clamp(-s * vel_world(0) + c * vel_world(1), -max_vy, max_vy);
   cmd.angular.z = vyaw_cmd;
 
-  if (exec_time >= traj_duration && pos_err.norm() < finish_dist)
+  if (exec_time >= traj_duration && pos_err.norm() < finish_dist &&
+      std::abs(yaw_err) < finish_yaw_tolerance)
     cmd = geometry_msgs::Twist();
 
   cmd_vel_pub.publish(cmd);

@@ -1,8 +1,0 @@
-prefix=/home/wa/inspection/3D_motion_planner/motion_planner/devel
-
-Name: scan_planner
-Description: Description of scan_planner
-Version: 0.0.0
-Cflags: -I/home/wa/inspection/3D_motion_planner/motion_planner/devel/include -I/home/wa/inspection/3D_motion_planner/motion_planner/src/scan_planner/planner/plan_manage/include
-Libs: -L${prefix}/lib -lscan_planner
-Requires: plan_env path_searching bspline_opt traj_utils message_runtime

@@ -65,7 +65,10 @@
 
   </node>
 
-  <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen"/>
+  <node pkg="odom_visualization" name="odom_visualization" type="odom_visualization" output="screen">
+    <!-- The map, PCT path, SCAN path and RobotModel must share one TF root. -->
+    <param name="frame_id" value="$(arg pcd_frame_id)" />
+  </node>
 
   <group ns="pcl_render_node">
         <param name="sensor_type" value="$(arg sensor_type)" />

@@ -63,6 +63,10 @@ namespace scan_planner
     double self_inflation_z_up_, self_inflation_z_down_;
     double self_double_cylinder_radius_, self_double_cylinder_offset_;
     double body_height_;
+    double reference_path_min_distance_;
+    double reference_path_simplify_tolerance_;
+    std::string reference_path_topic_;
+    std::string reference_path_z_mode_;
     std::string self_inflation_frame_id_;
 
     /* planning data */
@@ -81,6 +85,8 @@ namespace scan_planner
 
     Eigen::Vector3d init_pt_, start_pt_, start_vel_, start_acc_, start_yaw_; // start state
     Eigen::Vector3d end_pt_, end_vel_;                                       // goal state
+    double final_yaw_{0.0};
+    bool have_final_yaw_{false};
     Eigen::Vector3d local_target_pt_, local_target_vel_;                     // local target state
     std::vector<Eigen::Vector3d> active_waypoints_;
     int current_wp_;

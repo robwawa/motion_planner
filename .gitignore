@@ -1,0 +1,21 @@
+# Catkin/CMake build products
+/build/
+/devel/
+/install/
+/logs/
+
+# Generated ROS/CMake metadata
+*.pyc
+__pycache__/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.o
+*.so
+*.a
+
+# Catkin test and runtime output
+/.catkin_tools/
+/.ros/
+test_results/

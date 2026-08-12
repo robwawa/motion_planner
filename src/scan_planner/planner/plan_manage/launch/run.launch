@@ -11,6 +11,16 @@
   <!-- CPU sensing is the portable default; set use_gpu:=true only after the
        optional OpenGL backend has been built with catkin_make -DUSE_GPU=ON. -->
   <arg name="use_gpu" default="false"/>
+  <arg name="navigation_frame" default="map"/>
+  <arg name="reference_path_topic" default="/navigation/reference_path"/>
+  <arg name="reference_path_z_mode" default="base"/>
+  <arg name="reference_path_min_distance" default="0.5"/>
+  <arg name="reference_path_simplify_tolerance" default="0.15"/>
+  <arg name="use_pcd_map" default="false"/>
+  <arg name="pcd_map_file" default="$(find map_generator)/resource/building.pcd"/>
+  <arg name="init_x" default="-5.5"/>
+  <arg name="init_y" default="5.5"/>
+  <arg name="init_z" default="0.4"/>
 
   <!-- body topic -->
   <arg name="body_pose_topic" value="$(eval '/LIO/odom_vehicle' if arg('is_real_world') else '/quad_0/body_pose')" />
@@ -37,6 +47,11 @@
 
     <arg name="is_real_world" value="$(arg is_real_world)"/>
     <arg name="navi_mode" value="$(arg navi_mode)" />
+    <arg name="navigation_frame" value="$(arg navigation_frame)" />
+    <arg name="reference_path_topic" value="$(arg reference_path_topic)" />
+    <arg name="reference_path_z_mode" value="$(arg reference_path_z_mode)" />
+    <arg name="reference_path_min_distance" value="$(arg reference_path_min_distance)" />
+    <arg name="reference_path_simplify_tolerance" value="$(arg reference_path_simplify_tolerance)" />
   </include>
 
   <!-- controller mode -->
@@ -61,6 +76,12 @@
     <arg name="navi_mode" value="$(arg navi_mode)" />
     <arg name="sensor_type" value="$(arg sensor_type)" />
     <arg name="use_gpu" value="$(arg use_gpu)" />
+    <arg name="use_pcd_map" value="$(arg use_pcd_map)" />
+    <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
+    <arg name="pcd_frame_id" value="$(arg navigation_frame)" />
+    <arg name="init_x" value="$(arg init_x)" />
+    <arg name="init_y" value="$(arg init_y)" />
+    <arg name="init_z" value="$(arg init_z)" />
   </include>
 
 </launch>

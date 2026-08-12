@@ -35,7 +35,7 @@ double max_vyaw = kMaxVYawLimit;
 double cmd_timeout = 0.3;
 double sim_rate = 100.0;
 bool publish_tf = false;
-std::string frame_id = "world";
+std::string frame_id = "map";
 std::string child_frame_id = "base";
 std::string body_pose_topic = "/quad_0/body_pose";
 
@@ -158,7 +158,7 @@ int main(int argc, char **argv)
   nh.param("cmd_timeout", cmd_timeout, 0.3);
   nh.param("sim_rate", sim_rate, 100.0);
   nh.param("publish_tf", publish_tf, false);
-  nh.param("frame_id", frame_id, std::string("world"));
+  nh.param("frame_id", frame_id, std::string("map"));
   nh.param("child_frame_id", child_frame_id, std::string("base"));
 
   tf::TransformBroadcaster broadcaster;

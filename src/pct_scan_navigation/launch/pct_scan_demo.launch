@@ -1,0 +1,43 @@
+<launch>
+  <arg name="scene" default="Plaza" doc="PCT scene: Spiral, Building, or Plaza" />
+  <!-- Keep SCAN's collision map aligned with the PCT scene.  The argument can
+       still be overridden for custom PCD files, e.g. pcd_map_file:=/tmp/map.pcd. -->
+  <arg name="pcd_map_file"
+       default="$(eval find('pct_planner') + '/rsc/pcd/' + {'Spiral': 'spiral0.3_2.pcd', 'Building': 'building2_9.pcd', 'Plaza': 'plaza3_10.pcd'}[arg('scene')])" />
+  <arg name="controller_mode" default="open_loop" doc="open_loop for 3D path playback; closed_loop for same-floor Twist control" />
+  <arg name="use_gpu" default="false" />
+  <arg name="optimize_path" default="false" doc="PCT optimized path; set false for raw A* path" />
+
+  <!-- PCT and SCAN consume the exact same static map coordinate system. -->
+  <include file="$(find pct_planner)/launch/planner.launch">
+    <arg name="scene" value="$(arg scene)" />
+    <arg name="optimize_path" value="$(arg optimize_path)" />
+  </include>
+
+  <!-- Publish the PCT tomogram and visualization layers in the same map frame
+       used by the global planner, SCAN and the merged RViz configuration. -->
+  <include file="$(find pct_planner)/launch/tomography.launch">
+    <arg name="scene" value="$(arg scene)" />
+    <arg name="backend" value="cpu" />
+  </include>
+
+  <include file="$(find scan_planner)/launch/run.launch">
+    <arg name="is_real_world" value="false" />
+    <arg name="navi_mode" value="3" />
+    <arg name="sensor_type" value="lidar" />
+    <arg name="use_gpu" value="$(arg use_gpu)" />
+    <arg name="controller_mode" value="$(arg controller_mode)" />
+    <arg name="navigation_frame" value="map" />
+    <arg name="reference_path_topic" value="/navigation/reference_path" />
+    <arg name="use_pcd_map" value="true" />
+    <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
+    <arg name="init_x" value="5.0" />
+    <arg name="init_y" value="5.0" />
+    <arg name="init_z" value="0.4" />
+  </include>
+
+  <include file="$(find pct_scan_navigation)/launch/navigation.launch">
+    <arg name="body_pose_topic" value="/quad_0/body_pose" />
+    <arg name="navigation_frame" value="map" />
+  </include>
+</launch>

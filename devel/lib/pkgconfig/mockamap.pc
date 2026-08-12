@@ -1,8 +1,0 @@
-prefix=/home/wa/inspection/3D_motion_planner/motion_planner/devel
-
-Name: mockamap
-Description: Description of mockamap
-Version: 0.1.0
-Cflags: -I/home/wa/inspection/3D_motion_planner/motion_planner/src/scan_planner/simulator/mockamap/include
-Libs: -L${prefix}/lib 
-Requires: roscpp pcl_ros pcl_conversions

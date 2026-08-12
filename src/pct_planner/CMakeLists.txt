@@ -2,13 +2,30 @@ cmake_minimum_required(VERSION 3.0.2)
 project(pct_planner)
 
 find_package(catkin REQUIRED COMPONENTS
+  actionlib
+  actionlib_msgs
+  geometry_msgs
+  message_generation
   nav_msgs
   rospy
   sensor_msgs
   std_msgs
 )
 
-catkin_package(CATKIN_DEPENDS nav_msgs rospy sensor_msgs std_msgs)
+add_action_files(
+  FILES
+  PlanPath3D.action
+)
+
+generate_messages(
+  DEPENDENCIES
+  actionlib_msgs
+  geometry_msgs
+  nav_msgs
+  std_msgs
+)
+
+catkin_package(CATKIN_DEPENDS actionlib actionlib_msgs geometry_msgs message_runtime nav_msgs rospy sensor_msgs std_msgs)
 
 catkin_install_python(PROGRAMS
   scripts/pct_tomography_node.py

@@ -1,8 +1,0 @@
-prefix=/home/wa/inspection/3D_motion_planner/motion_planner/devel
-
-Name: pct_planner
-Description: Description of pct_planner
-Version: 1.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: nav_msgs rospy sensor_msgs std_msgs

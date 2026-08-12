@@ -1,0 +1,8 @@
+navigation_frame: map
+body_pose_topic: /quad_0/body_pose
+goal_topic: /goal_pose_3d
+reference_path_topic: /navigation/reference_path
+validated_goal_topic: /navigation/validated_goal
+status_topic: /navigation/status
+max_start_distance: 1.0
+action_wait_timeout: 15.0

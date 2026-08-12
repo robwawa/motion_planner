@@ -158,7 +158,7 @@ int main(int argc, char** argv)
 
   pnh.param<std::string>("bspline_topic", bspline_topic, "/planning/bspline");
   ros::param::param<std::string>("/body_pose_topic", body_pose_topic, std::string("/quad_0/body_pose"));
-  pnh.param<std::string>("frame_id", frame_id, "world");
+  pnh.param<std::string>("frame_id", frame_id, "map");
   pnh.param<std::string>("child_frame_id", child_frame_id, "quadruped");
   pnh.param("publish_rate", publish_rate, 100.0);
   pnh.param("yaw_min_speed", yaw_min_speed, 0.05);
