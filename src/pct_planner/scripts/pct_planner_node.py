@@ -6,6 +6,7 @@ import ctypes
 import math
 import os
 import sys
+import time
 
 import actionlib
 import rospy
@@ -83,11 +84,40 @@ class PCTActionServer:
             pose.position.x, pose.position.y, pose.position.z,
             pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w))
 
-    def fail(self, status, message):
+    def make_snapped_pose(self, source, position):
+        pose = PoseStamped()
+        pose.header.frame_id = self.navigation_frame
+        pose.header.stamp = rospy.Time.now()
+        pose.pose = source.pose
+        pose.pose.position.x = float(position[0])
+        pose.pose.position.y = float(position[1])
+        pose.pose.position.z = float(position[2])
+        return pose
+
+    def make_result(self, status, message, path=None, snapped_start=None, snapped_goal=None):
         result = PlanPath3DResult(status=status, message=message)
+        if path is not None:
+            result.path = path
+        if snapped_start is not None:
+            pose, distance, _ = snapped_start
+            result.has_snapped_start = True
+            result.snapped_start = pose
+            result.snapped_start_distance = float(distance)
+        if snapped_goal is not None:
+            pose, distance, _ = snapped_goal
+            result.has_snapped_goal = True
+            result.snapped_goal = pose
+            result.snapped_goal_distance = float(distance)
+        return result
+
+    def fail(self, status, message, snapped_start=None, snapped_goal=None):
+        result = self.make_result(status, message, snapped_start=snapped_start,
+                                  snapped_goal=snapped_goal)
         self.server.set_aborted(result, message)
 
     def execute(self, goal):
+        snapped_start = None
+        snapped_goal = None
         self.feedback('validating')
         if (goal.start.header.frame_id != self.navigation_frame or
                 goal.goal.header.frame_id != self.navigation_frame):
@@ -115,37 +145,63 @@ class PCTActionServer:
                 self.fail(PlanPath3DResult.NO_TRAVERSABLE_LAYER,
                           'no traversable surface near start or goal')
                 return
-            start_pose, start_layer, start_distance = start
-            goal_pose, goal_layer, goal_distance = end
+            start_position, start_layer, start_distance = start
+            goal_position, goal_layer, goal_distance = end
+            snapped_start = (self.make_snapped_pose(goal.start, start_position),
+                             start_distance, start_layer)
+            snapped_goal = (self.make_snapped_pose(goal.goal, goal_position),
+                            goal_distance, goal_layer)
+            start_index = self.planner.pos2idx(start_position[:2]).astype(int)
+            goal_index = self.planner.pos2idx(goal_position[:2]).astype(int)
+            rospy.loginfo(
+                '[pct_planner] raw start=(%.2f, %.2f, %.2f), goal=(%.2f, %.2f, %.2f); '
+                'snapped start=(%.2f, %.2f, %.2f) layer=%d grid=(%d,%d) dist=%.2f; '
+                'goal=(%.2f, %.2f, %.2f) layer=%d grid=(%d,%d) dist=%.2f',
+                goal.start.pose.position.x, goal.start.pose.position.y, goal.start.pose.position.z,
+                goal.goal.pose.position.x, goal.goal.pose.position.y, goal.goal.pose.position.z,
+                start_position[0], start_position[1], start_position[2], start_layer,
+                start_index[0], start_index[1], start_distance,
+                goal_position[0], goal_position[1], goal_position[2], goal_layer,
+                goal_index[0], goal_index[1], goal_distance)
             self.feedback('planning')
+            planning_start = time.monotonic()
             trajectory = self.planner.plan(
-                start_pose[:2], goal_pose[:2], start_layer, goal_layer, self.body_height,
+                start_position[:2], goal_position[:2], start_layer, goal_layer, self.body_height,
                 optimize_path=self.optimize_path)
+            planning_elapsed_ms = (time.monotonic() - planning_start) * 1000.0
             if self.server.is_preempt_requested():
-                self.server.set_preempted(PlanPath3DResult(status=PlanPath3DResult.PREEMPTED), 'preempted')
+                self.server.set_preempted(
+                    self.make_result(PlanPath3DResult.PREEMPTED, 'preempted',
+                                     snapped_start=snapped_start, snapped_goal=snapped_goal),
+                    'preempted')
                 return
             if trajectory is None or len(trajectory) < 2:
-                self.fail(PlanPath3DResult.NO_PATH, 'PCT did not find a path')
+                rospy.logwarn('[pct_planner] A* failed in %.1f ms.', planning_elapsed_ms)
+                self.fail(PlanPath3DResult.NO_PATH, 'PCT did not find a path',
+                          snapped_start, snapped_goal)
                 return
+            rospy.loginfo('[pct_planner] A* found %d points in %.1f ms.',
+                          len(trajectory), planning_elapsed_ms)
             self.feedback('publishing')
             path = self.to_path(trajectory, goal.goal)
             # Preserve the exact snapped endpoint in the public path.  This
             # avoids exposing a numerically close, but visually floating,
             # endpoint when the native optimiser returns a rounded value.
-            path.poses[-1].pose.position.x = goal_pose[0]
-            path.poses[-1].pose.position.y = goal_pose[1]
-            path.poses[-1].pose.position.z = goal_pose[2]
+            path.poses[-1].pose.position.x = goal_position[0]
+            path.poses[-1].pose.position.y = goal_position[1]
+            path.poses[-1].pose.position.z = goal_position[2]
             self.path_pub.publish(path)
-            result = PlanPath3DResult(
-                status=PlanPath3DResult.SUCCESS,
-                message='ok; start snapped {:.2f}m, goal snapped {:.2f}m'.format(
-                    start_distance, goal_distance), path=path)
+            result = self.make_result(
+                PlanPath3DResult.SUCCESS,
+                'ok; start snapped {:.2f}m, goal snapped {:.2f}m'.format(
+                    start_distance, goal_distance),
+                path, snapped_start, snapped_goal)
             self.server.set_succeeded(result, 'path found')
         except ValueError as exc:
-            self.fail(PlanPath3DResult.OUT_OF_MAP, str(exc))
+            self.fail(PlanPath3DResult.OUT_OF_MAP, str(exc), snapped_start, snapped_goal)
         except Exception as exc:  # native extension errors must not crash a navigation client
             rospy.logerr('[pct_planner] planning failed: %s', exc)
-            self.fail(PlanPath3DResult.INTERNAL_ERROR, str(exc))
+            self.fail(PlanPath3DResult.INTERNAL_ERROR, str(exc), snapped_start, snapped_goal)
 
     def to_path(self, trajectory, goal):
         path = Path()

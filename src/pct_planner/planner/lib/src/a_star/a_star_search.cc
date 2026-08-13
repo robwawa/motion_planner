@@ -81,10 +81,11 @@ int Astar::GetHash(const Eigen::Vector3i& idx) const {
 bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
   auto t0 = std::chrono::high_resolution_clock::now();
 
-  if (!search_result_.empty()) {
-    Reset();
-    search_result_.clear();
-  }
+  // A failed search leaves visited nodes with finite g/f values and parent
+  // links even though search_result_ stays empty.  Every query must therefore
+  // start from a clean grid, independent of the previous query outcome.
+  Reset();
+  search_result_.clear();
 
   auto start_node = &grid_map_[start[0]][start[2]][start[1]];
   auto goal_node = &grid_map_[goal[0]][goal[2]][goal[1]];

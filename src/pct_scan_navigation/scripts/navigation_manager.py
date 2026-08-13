@@ -97,15 +97,21 @@ class NavigationManager:
         self.client.send_goal(request, done_cb=self.plan_done)
 
     def plan_done(self, state, result):
-        if result is None or result.status != result.SUCCESS:
+        if result is None:
+            self.publish_status('ABORTED', 'no_action_result')
+            return
+
+        # Endpoint projection is useful even when the global route is
+        # unavailable: reflect the snapped target in RViz, but never send an
+        # empty/failed route to SCAN.
+        if result.has_snapped_goal:
+            self.validated_goal_pub.publish(result.snapped_goal)
+
+        if result.status != result.SUCCESS:
             reason = result.message if result is not None else 'no_action_result'
             self.publish_status('ABORTED', reason)
             return
         try:
-            # The PCT server has projected both endpoints to traversable cells.
-            # Reflect its final endpoint in RViz so the goal marker never stays
-            # floating at the operator's raw drag position.
-            self.validated_goal_pub.publish(result.path.poses[-1])
             path = self.prepare_path(result.path)
             self.reference_pub.publish(path)
             self.publish_status('PATH_TRACKING')

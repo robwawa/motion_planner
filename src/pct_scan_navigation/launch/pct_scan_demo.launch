@@ -1,5 +1,5 @@
 <launch>
-  <arg name="scene" default="Building" doc="PCT scene: Spiral, Building, or Plaza" />
+  <arg name="scene" default="Plaza" doc="PCT scene: Spiral, Building, or Plaza" />
   <!-- Keep SCAN's collision map aligned with the PCT scene.  The argument can
        still be overridden for custom PCD files, e.g. pcd_map_file:=/tmp/map.pcd. -->
   <arg name="pcd_map_file"
