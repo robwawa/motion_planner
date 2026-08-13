@@ -6,6 +6,38 @@ namespace scan_planner
 {
   namespace
   {
+    bool makePiecewiseLinearTrajectory(const std::vector<Eigen::Vector3d> &points,
+                                       const double max_vel,
+                                       PolynomialTraj &trajectory)
+    {
+      if (points.size() < 2 || max_vel <= 1e-6)
+        return false;
+
+      trajectory.reset();
+      size_t valid_segment_count = 0;
+      for (size_t i = 0; i + 1 < points.size(); ++i)
+      {
+        const Eigen::Vector3d displacement = points[i + 1] - points[i];
+        const double distance = displacement.norm();
+        if (distance <= 1e-6)
+          continue;
+
+        const double duration = distance / max_vel;
+        const Eigen::Vector3d velocity = displacement / duration;
+        trajectory.addSegment(
+            {0.0, velocity.x(), points[i].x()},
+            {0.0, velocity.y(), points[i].y()},
+            {0.0, velocity.z(), points[i].z()}, duration);
+        ++valid_segment_count;
+      }
+
+      if (valid_segment_count == 0)
+        return false;
+
+      trajectory.init();
+      return true;
+    }
+
     void applyLinearZReference(std::vector<Eigen::Vector3d> &points, const double start_z, const double target_z)
     {
       if (points.empty())
@@ -34,6 +66,48 @@ namespace scan_planner
       }
 
       points.front()(2) = start_z;
+      points.back()(2) = target_z;
+    }
+
+    void applyReferencePathZ(std::vector<Eigen::Vector3d> &points,
+                             const std::vector<Eigen::Vector3d> &reference_path,
+                             const double start_progress,
+                             const double start_z,
+                             const double target_z)
+    {
+      if (points.empty() || reference_path.size() < 2)
+      {
+        applyLinearZReference(points, start_z, target_z);
+        return;
+      }
+
+      std::vector<double> reference_progress(reference_path.size(), 0.0);
+      for (size_t i = 1; i < reference_path.size(); ++i)
+        reference_progress[i] = reference_progress[i - 1] +
+                                (reference_path[i].head<2>() - reference_path[i - 1].head<2>()).norm();
+
+      const auto sample_z = [&](const double progress) {
+        const double clamped = std::max(0.0, std::min(progress, reference_progress.back()));
+        for (size_t i = 1; i < reference_progress.size(); ++i)
+        {
+          if (clamped <= reference_progress[i])
+          {
+            const double segment_length = reference_progress[i] - reference_progress[i - 1];
+            const double ratio = segment_length > 1e-6 ?
+                (clamped - reference_progress[i - 1]) / segment_length : 0.0;
+            return reference_path[i - 1](2) + ratio * (reference_path[i](2) - reference_path[i - 1](2));
+          }
+        }
+        return reference_path.back()(2);
+      };
+
+      double local_progress = 0.0;
+      points.front()(2) = start_z;
+      for (size_t i = 1; i < points.size(); ++i)
+      {
+        local_progress += (points[i].head<2>() - points[i - 1].head<2>()).norm();
+        points[i](2) = sample_z(start_progress + local_progress);
+      }
       points.back()(2) = target_z;
     }
   } // namespace
@@ -76,7 +150,9 @@ namespace scan_planner
 
   bool SCANPlannerManager::reboundReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
                                         Eigen::Vector3d start_acc, Eigen::Vector3d local_target_pt,
-                                        Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj)
+                                        Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj,
+                                        const std::vector<Eigen::Vector3d> *z_reference_path,
+                                        double z_reference_start_progress)
   {
 
     static int count = 0;
@@ -243,7 +319,11 @@ namespace scan_planner
       }
     } while (flag_regenerate);
 
-    applyLinearZReference(point_set, start_pt(2), local_target_pt(2));
+    if (z_reference_path != nullptr && z_reference_path->size() >= 2)
+      applyReferencePathZ(point_set, *z_reference_path, z_reference_start_progress,
+                          start_pt(2), local_target_pt(2));
+    else
+      applyLinearZReference(point_set, start_pt(2), local_target_pt(2));
 
     Eigen::MatrixXd ctrl_pts;
     UniformBspline::parameterizeToBspline(ts, point_set, start_end_derivatives, ctrl_pts);
@@ -322,7 +402,8 @@ namespace scan_planner
   }
 
   bool SCANPlannerManager::planGlobalTrajWaypoints(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
-                                                  const std::vector<Eigen::Vector3d> &waypoints, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc)
+                                                  const std::vector<Eigen::Vector3d> &waypoints, const Eigen::Vector3d &end_vel,
+                                                  const Eigen::Vector3d &end_acc, const bool use_piecewise_linear_reference)
   {
 
     // generate global reference trajectory
@@ -336,6 +417,19 @@ namespace scan_planner
     for (size_t wp_i = 0; wp_i < waypoints.size(); wp_i++)
     {
       points.push_back(waypoints[wp_i]);
+    }
+
+    if (use_piecewise_linear_reference)
+    {
+      PolynomialTraj gl_traj;
+      if (!makePiecewiseLinearTrajectory(points, pp_.max_vel_, gl_traj))
+      {
+        ROS_ERROR("Unable to generate piecewise-linear reference trajectory from waypoints.");
+        return false;
+      }
+
+      global_data_.setGlobalTraj(gl_traj, ros::Time::now());
+      return true;
     }
 
     double total_len = 0;

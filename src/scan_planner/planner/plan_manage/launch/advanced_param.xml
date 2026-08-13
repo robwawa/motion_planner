@@ -15,11 +15,13 @@
   <arg name="reference_path_z_mode" default="base"/>
   <arg name="reference_path_min_distance" default="0.5"/>
   <arg name="reference_path_simplify_tolerance" default="0.15"/>
+  <arg name="reference_path_mode" default="min_snap_single_pass"/>
   <arg name="navigation_frame" default="map"/>
 
   <!-- public parameters -->
   <arg name="max_vel" default="0.75"/>
   <arg name="max_acc" default="0.5"/>
+  <!-- 前视距离 -->
   <arg name="planning_horizon" default="3.5"/>
 
   <!-- main node -->
@@ -34,7 +36,9 @@
 
     <!-- planning fsm -->
     <param name="fsm/navi_mode" value="$(arg navi_mode)" type="int"/>
+    <!-- 重新规划阈值 -->
     <param name="fsm/thresh_replan" value="1.0" type="double"/>
+    <!-- 无重新规划阈值 -->
     <param name="fsm/thresh_no_replan" value="0.1" type="double"/>
     <param name="fsm/planning_horizon" value="$(arg planning_horizon)" type="double"/>
     <param name="fsm/emergency_time_" value="1.0" type="double"/>
@@ -45,6 +49,7 @@
     <param name="fsm/reference_path_z_mode" value="$(arg reference_path_z_mode)" type="str"/>
     <param name="fsm/reference_path_min_distance" value="$(arg reference_path_min_distance)" type="double"/>
     <param name="fsm/reference_path_simplify_tolerance" value="$(arg reference_path_simplify_tolerance)" type="double"/>
+    <param name="fsm/reference_path_mode" value="$(arg reference_path_mode)" type="str"/>
 
     <!-- sliding map -->
     <param name="grid_map/resolution" value="0.05" />
@@ -54,9 +59,17 @@
     <param name="grid_map/map_sliding_thresh" value="0.2"/>
     <param name="grid_map/double_cylinder_radius" value="0.25" />
     <param name="grid_map/double_cylinder_offset" value="0.18" />
-    <param name="grid_map/obstacles_inflation_z_up" value="0.1" />
-    <param name="grid_map/obstacles_inflation_z_down" value="0.1" />
+    <!-- 向上膨胀 -->
+    <param name="grid_map/obstacles_inflation_z_up" value="0.0" />  
+    <param name="grid_map/obstacles_inflation_z_down" value="0.0" />
     <param name="grid_map/body_height" value="0.4" />
+    <!-- 地面支撑约束：SCAN 显式启用，其他机器人可在各自配置中关闭或替换足迹。 -->
+    <param name="grid_map/traversability_enabled" value="true" />
+    <param name="grid_map/support_model" value="double_cylinder" />
+    <param name="grid_map/support_body_height" value="0.4" />
+    <param name="grid_map/support_max_drop" value="0.15" />
+    <param name="grid_map/support_height_tolerance_up" value="0.15" />
+    <param name="grid_map/support_max_height_difference" value="0.35" />
     <param name="grid_map/frame_id" value="$(arg navigation_frame)" type="str"/>
 
     <!-- depth camera intrinsics -->

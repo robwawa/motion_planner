@@ -16,6 +16,7 @@
   <arg name="reference_path_z_mode" default="base"/>
   <arg name="reference_path_min_distance" default="0.5"/>
   <arg name="reference_path_simplify_tolerance" default="0.15"/>
+  <arg name="reference_path_mode" default="min_snap_single_pass"/>
   <arg name="use_pcd_map" default="false"/>
   <arg name="pcd_map_file" default="$(find map_generator)/resource/building.pcd"/>
   <arg name="init_x" default="-5.5"/>
@@ -52,6 +53,7 @@
     <arg name="reference_path_z_mode" value="$(arg reference_path_z_mode)" />
     <arg name="reference_path_min_distance" value="$(arg reference_path_min_distance)" />
     <arg name="reference_path_simplify_tolerance" value="$(arg reference_path_simplify_tolerance)" />
+    <arg name="reference_path_mode" value="$(arg reference_path_mode)" />
   </include>
 
   <!-- controller mode -->

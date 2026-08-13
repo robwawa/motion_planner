@@ -67,7 +67,8 @@ private:
 
 	//bool (*checkOccupancyPtr)( const Eigen::Vector3d &pos );
 
-	inline int checkOccupancy(const Eigen::Vector3d &pos, const double yaw) { return grid_map_->getInflateOccupancy(pos, yaw); }
+	// 节点同时必须满足车体无碰撞和整个轮式足迹具有可靠支撑。
+	inline int checkOccupancy(const Eigen::Vector3d &pos, const double yaw) { return grid_map_->getTraversabilityOccupancy(pos, yaw); }
 
 	std::vector<GridNodePtr> retrievePath(GridNodePtr current);
 

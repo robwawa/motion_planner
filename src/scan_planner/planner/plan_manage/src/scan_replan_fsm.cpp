@@ -2,6 +2,7 @@
 #include <plan_manage/scan_replan_fsm.h>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <tf/transform_datatypes.h>
 
 namespace
@@ -136,6 +137,7 @@ namespace scan_planner
     nh.param("fsm/reference_path_simplify_tolerance", reference_path_simplify_tolerance_, 0.15);
     nh.param("fsm/reference_path_topic", reference_path_topic_, std::string("/initial_path"));
     nh.param("fsm/reference_path_z_mode", reference_path_z_mode_, std::string("base"));
+    nh.param("fsm/reference_path_mode", reference_path_mode_, std::string("min_snap_single_pass"));
     nh.param("grid_map/frame_id", self_inflation_frame_id_, std::string("world"));
 
     if (reference_path_z_mode_ != "base" && reference_path_z_mode_ != "ground")
@@ -148,6 +150,14 @@ namespace scan_planner
     if (reference_path_min_distance_ < 0.0 || reference_path_simplify_tolerance_ < 0.0)
     {
       ROS_ERROR("[SCANReplanFSM] Reference-path preprocessing distances must be non-negative.");
+      ros::shutdown();
+      return;
+    }
+    if (reference_path_mode_ != "min_snap_single_pass" &&
+        reference_path_mode_ != "polyline_rolling_window")
+    {
+      ROS_ERROR("[SCANReplanFSM] fsm/reference_path_mode must be 'min_snap_single_pass' or "
+                "'polyline_rolling_window', got '%s'.", reference_path_mode_.c_str());
       ros::shutdown();
       return;
     }
@@ -198,6 +208,7 @@ namespace scan_planner
     bspline_pub_ = nh.advertise<scan_planner::Bspline>("/planning/bspline", 10);
     data_disp_pub_ = nh.advertise<scan_planner::DataDisp>("/planning/data_display", 100);
     self_inflation_pub_ = nh.advertise<visualization_msgs::Marker>("self_inflation", 10, true);
+    global_reference_path_pub_ = nh.advertise<nav_msgs::Path>("/planning/global_reference_path", 1, true);
 
     if (navi_mode_ == NAVI_MODE::MANUAL_TARGET)
       goal_sub_ = nh.subscribe("/move_base_simple/goal", 1, &SCANReplanFSM::rvizGoalCallback, this);
@@ -212,6 +223,44 @@ namespace scan_planner
       path_sub_ = nh.subscribe(reference_path_topic_, 1, &SCANReplanFSM::pathCallback, this);
     else
       cout << "Wrong navi_mode_ value! navi_mode_=" << navi_mode_ << endl;
+  }
+
+  void SCANReplanFSM::publishGlobalReferencePath()
+  {
+    if (!global_reference_path_pub_)
+      return;
+
+    auto &global_data = planner_manager_->global_data_;
+    const double duration = global_data.global_duration_;
+    if (duration <= 1e-6)
+      return;
+
+    nav_msgs::Path path;
+    path.header.stamp = ros::Time::now();
+    path.header.frame_id = self_inflation_frame_id_.empty() ? "world" : self_inflation_frame_id_;
+
+    constexpr double sample_dt = 0.05;
+    for (double t = 0.0; t < duration; t += sample_dt)
+    {
+      const Eigen::Vector3d position = global_data.global_traj_.evaluate(t);
+      geometry_msgs::PoseStamped pose;
+      pose.header = path.header;
+      pose.pose.position.x = position.x();
+      pose.pose.position.y = position.y();
+      pose.pose.position.z = position.z();
+      pose.pose.orientation.w = 1.0;
+      path.poses.push_back(pose);
+    }
+
+    const Eigen::Vector3d final_position = global_data.global_traj_.evaluate(duration);
+    geometry_msgs::PoseStamped final_pose;
+    final_pose.header = path.header;
+    final_pose.pose.position.x = final_position.x();
+    final_pose.pose.position.y = final_position.y();
+    final_pose.pose.position.z = final_position.z();
+    final_pose.pose.orientation.w = 1.0;
+    path.poses.push_back(final_pose);
+    global_reference_path_pub_.publish(path);
   }
 
   void SCANReplanFSM::planGlobalTrajbyGivenWps()
@@ -273,6 +322,16 @@ namespace scan_planner
 
     bool success = false;
     end_pt_ << msg->poses[0].pose.position.x, msg->poses[0].pose.position.y, rviz_goal_height_;
+    const auto &final_orientation = msg->poses[0].pose.orientation;
+    const double q_norm = std::sqrt(final_orientation.x * final_orientation.x +
+                                    final_orientation.y * final_orientation.y +
+                                    final_orientation.z * final_orientation.z +
+                                    final_orientation.w * final_orientation.w);
+    // RViz 目标箭头的朝向仅作为终点姿态，途中仍由轨迹切线决定车头方向。
+    have_final_yaw_ = q_norm > 1e-6;
+    if (have_final_yaw_)
+      final_yaw_ = tf::getYaw(final_orientation);
+
     success = planner_manager_->planGlobalTraj(odom_pos_, odom_vel_, Eigen::Vector3d::Zero(), end_pt_, Eigen::Vector3d::Zero(), Eigen::Vector3d::Zero());
 
     if (success)
@@ -295,6 +354,7 @@ namespace scan_planner
       end_vel_.setZero();
       have_target_ = true;
       have_new_target_ = true;
+      publishGlobalReferencePath();
 
       /*** FSM ***/
       if (exec_state_ == WAIT_TARGET)
@@ -334,7 +394,8 @@ namespace scan_planner
         Eigen::Vector3d::Zero(),
         reference_waypoints,
         Eigen::Vector3d::Zero(),
-        Eigen::Vector3d::Zero());
+        Eigen::Vector3d::Zero(),
+        usePolylineRollingWindow());
 
     if (!success)
     {
@@ -356,6 +417,7 @@ namespace scan_planner
     end_vel_.setZero();
     have_target_ = true;
     have_new_target_ = true;
+    publishGlobalReferencePath();
     visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
     visualization_->displayGoalPoint(end_pt_, Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, static_cast<int>(waypoints.size()) - 1);
 
@@ -401,6 +463,7 @@ namespace scan_planner
     end_vel_.setZero();
     have_target_ = true;
     have_new_target_ = true;
+    publishGlobalReferencePath();
     visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
     visualization_->displayGoalPoint(end_pt_, Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, current_wp_);
     ROS_INFO("[navi_mode=%d] Planning to waypoint %d/%zu: [%.2f, %.2f, %.2f].",
@@ -412,6 +475,46 @@ namespace scan_planner
   bool SCANReplanFSM::isWaypointSequenceMode() const
   {
     return navi_mode_ == NAVI_MODE::PRESET_TARGET;
+  }
+
+  bool SCANReplanFSM::usePolylineRollingWindow() const
+  {
+    return navi_mode_ == NAVI_MODE::REFERENCE_PATH &&
+           reference_path_mode_ == "polyline_rolling_window";
+  }
+
+  double SCANReplanFSM::projectReferencePathProgress(const Eigen::Vector3d &point) const
+  {
+    if (reference_path_z_profile_.size() < 2)
+      return 0.0;
+
+    double best_distance_sq = std::numeric_limits<double>::infinity();
+    double best_progress = reference_path_z_progress_;
+    double accumulated = 0.0;
+    const Eigen::Vector2d query = point.head<2>();
+    for (size_t i = 1; i < reference_path_z_profile_.size(); ++i)
+    {
+      const Eigen::Vector2d begin = reference_path_z_profile_[i - 1].head<2>();
+      const Eigen::Vector2d segment = reference_path_z_profile_[i].head<2>() - begin;
+      const double segment_length = segment.norm();
+      if (segment_length <= 1e-6)
+        continue;
+
+      const double ratio = std::max(0.0, std::min(1.0,
+          (query - begin).dot(segment) / segment.squaredNorm()));
+      const double progress = accumulated + ratio * segment_length;
+      if (progress + 1e-6 >= reference_path_z_progress_)
+      {
+        const double distance_sq = (query - (begin + ratio * segment)).squaredNorm();
+        if (distance_sq < best_distance_sq)
+        {
+          best_distance_sq = distance_sq;
+          best_progress = progress;
+        }
+      }
+      accumulated += segment_length;
+    }
+    return best_progress;
   }
 
   bool SCANReplanFSM::adjustGlobalTargetIfOccupied()
@@ -505,6 +608,12 @@ namespace scan_planner
       waypoints.front() = odom_pos_;
     else
       waypoints.insert(waypoints.begin(), odom_pos_);
+
+    // Keep an immutable, already height-normalized PCT profile for local
+    // B-spline initialization. The global trajectory can contain prior local
+    // replacements, so it is not an appropriate source for terrain height.
+    reference_path_z_profile_ = waypoints;
+    reference_path_z_progress_ = 0.0;
 
     ROS_INFO("[pathCallback] Reference path reduced from %zu poses to %zu trajectory waypoints.",
              msg->poses.size(), waypoints.size());
@@ -781,6 +890,18 @@ namespace scan_planner
       /* && (end_pt_ - pos).norm() < 0.5 */
       if (t_cur > info->duration_ - 1e-2)
       {
+        const auto &global_data = planner_manager_->global_data_;
+        const bool reference_path_has_next_window =
+            usePolylineRollingWindow() &&
+            global_data.last_progress_time_ < global_data.global_duration_ - 1e-3;
+        if (reference_path_has_next_window)
+        {
+          ROS_INFO("[reference path] Local window complete (%.2f/%.2fs); planning next window.",
+                   global_data.last_progress_time_, global_data.global_duration_);
+          changeFSMExecState(REPLAN_TRAJ, "FSM");
+          return;
+        }
+
         if (isWaypointSequenceMode() && current_wp_ + 1 < (int)active_waypoints_.size())
         {
           current_wp_++;
@@ -1011,9 +1132,20 @@ namespace scan_planner
 
     getLocalTarget();
 
+    const bool use_reference_z = navi_mode_ == NAVI_MODE::REFERENCE_PATH &&
+                                 reference_path_z_profile_.size() >= 2;
+    const double reference_start_progress = use_reference_z ?
+        projectReferencePathProgress(start_pt_) : 0.0;
+
     bool plan_success =
-        planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_, (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj);
+        planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_,
+                                        (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj,
+                                        use_reference_z ? &reference_path_z_profile_ : nullptr,
+                                        reference_start_progress);
     have_new_target_ = false;
+
+    if (plan_success && use_reference_z)
+      reference_path_z_progress_ = reference_start_progress;
 
     cout << "final_plan_success=" << plan_success << endl;
 

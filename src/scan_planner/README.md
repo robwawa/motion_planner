@@ -93,7 +93,7 @@ The main launch options are defined in [`run.launch`](src/planner/plan_manage/la
 - `navi_mode`: selects the navigation interface:
   - `1`: interactive 2D Nav Goal mode
   - `2`: keypoint-based multi-floor navigation; see [`tools/README.md`](tools/README.md)
-  - `3`: reference-path tracking with local obstacle avoidance; see [`TravExplorer`](https://github.com/wuyi2121/TravExplorer)
+  - `3`: reference-path tracking with local obstacle avoidance; see [`TravExplorer`](https://github.com/wuyi2121/TravExplorer). The local B-spline is initialized from the reference path's Z profile (sampled by forward XY progress), while SCAN still performs 3D collision avoidance. `reference_path_z_mode=base` expects base-height input; `ground` adds `grid_map/body_height` once.
 
   **Note: If the robot cannot climb stairs, increase the z height of body, keypoints or initial path.**
 - `sensor_type`: select the sensing input. Use `lidar` for point-cloud sensors such as MID360, and `depth` for depth cameras such as RealSense D435.

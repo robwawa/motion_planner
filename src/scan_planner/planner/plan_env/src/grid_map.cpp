@@ -22,6 +22,14 @@ void GridMap::initMap(ros::NodeHandle &nh)
   node_.param("grid_map/obstacles_inflation_z_down", mp_.obstacles_inflation_z_down, -1.0);
   node_.param("grid_map/double_cylinder_radius", mp_.double_cylinder_radius_, -1.0);
   node_.param("grid_map/double_cylinder_offset", mp_.double_cylinder_offset_, 0.0);
+  node_.param("grid_map/traversability_enabled", traversability_profile_.enabled, false);
+  node_.param("grid_map/support_body_height", traversability_profile_.body_height, 0.0);
+  node_.param("grid_map/support_max_drop", traversability_profile_.max_drop, 0.0);
+  node_.param("grid_map/support_height_tolerance_up", traversability_profile_.height_tolerance_up, 0.0);
+  node_.param("grid_map/support_max_height_difference",
+              traversability_profile_.max_support_height_difference, 0.0);
+  string support_model;
+  node_.param("grid_map/support_model", support_model, string("double_cylinder"));
   node_.param("grid_map/map_sliding_en", mp_.map_sliding_en_, true);
   node_.param("grid_map/map_sliding_thresh", mp_.map_sliding_thresh_, mp_.resolution_);
 
@@ -49,6 +57,15 @@ void GridMap::initMap(ros::NodeHandle &nh)
   node_.param("grid_map/frame_id", mp_.frame_id_, string("world"));
   node_.param("grid_map/sliding_map_frame_id", mp_.sliding_map_frame_id_, string("sliding_map"));
   node_.param("grid_map/ground_height", mp_.ground_height_, 0.0);
+
+  // 保持与已有 SCAN 参数兼容；新机器人应使用 support_body_height 显式配置。
+  if (traversability_profile_.body_height <= 0.0)
+    node_.param("grid_map/body_height", traversability_profile_.body_height, 0.0);
+  if (traversability_profile_.height_tolerance_up <= 0.0)
+    traversability_profile_.height_tolerance_up = mp_.resolution_;
+  if (traversability_profile_.max_support_height_difference <= 0.0)
+    traversability_profile_.max_support_height_difference = std::numeric_limits<double>::infinity();
+  rebuildSupportSamples(support_model);
 
   node_.param("grid_map/sensor_type", mp_.sensor_type_, string("lidar"));
   node_.param("grid_map/cloud_is_world", mp_.cloud_is_world_, true);
@@ -108,6 +125,10 @@ void GridMap::initMap(ros::NodeHandle &nh)
   md_.occupancy_buffer_ = vector<double>(buffer_size, mp_.clamp_min_log_ - mp_.unknown_flag_);
   md_.occupancy_buffer_inflate_ = vector<char>(buffer_size, 0);
   md_.occupancy_buffer_inflate_cnt_ = vector<int>(buffer_size, 0);
+  const int support_size = mp_.map_voxel_num_(0) * mp_.map_voxel_num_(1);
+  md_.support_height_buffer_ = vector<float>(support_size, std::numeric_limits<float>::quiet_NaN());
+  md_.support_known_buffer_ = vector<char>(support_size, 0);
+  md_.support_dirty_buffer_ = vector<char>(support_size, 1);
   rebuildInflationOffsets();
 
   md_.count_hit_and_miss_ = vector<short>(buffer_size, 0);
@@ -207,11 +228,156 @@ void GridMap::rebuildInflationOffsets()
     }
 }
 
+void GridMap::rebuildSupportSamples(const string& model)
+{
+  if (!traversability_profile_.support_samples.empty())
+    return;
+
+  if (model == "double_cylinder")
+  {
+    const double offset = std::max(0.0, mp_.double_cylinder_offset_);
+    const double lateral = std::max(0.0, mp_.double_cylinder_radius_ * 0.7);
+
+    // 双圆柱中心加左右边缘点，避免仅中心有支撑而车体侧向悬空。
+    for (const double longitudinal : {offset, -offset})
+    {
+      traversability_profile_.support_samples.emplace_back(longitudinal, 0.0);
+      if (lateral > 1e-6)
+      {
+        traversability_profile_.support_samples.emplace_back(longitudinal, lateral);
+        traversability_profile_.support_samples.emplace_back(longitudinal, -lateral);
+      }
+    }
+  }
+  else if (model == "center")
+  {
+    traversability_profile_.support_samples.emplace_back(0.0, 0.0);
+  }
+  else
+  {
+    ROS_WARN("[GridMap] Unsupported support_model '%s'; use double_cylinder.", model.c_str());
+    traversability_profile_.support_samples.emplace_back(mp_.double_cylinder_offset_, 0.0);
+    traversability_profile_.support_samples.emplace_back(-mp_.double_cylinder_offset_, 0.0);
+  }
+}
+
+void GridMap::setTraversabilityProfile(const TraversabilityProfile& profile)
+{
+  traversability_profile_ = profile;
+  if (traversability_profile_.support_samples.empty())
+    rebuildSupportSamples("double_cylinder");
+}
+
+void GridMap::markSupportColumnDirty(const Eigen::Vector3i& id)
+{
+  if (md_.support_dirty_buffer_.empty() || !isInMap(id))
+    return;
+  md_.support_dirty_buffer_[toSupportAddress(id)] = 1;
+}
+
+void GridMap::updateSupportColumn(const Eigen::Vector3i& id)
+{
+  const int support_addr = toSupportAddress(id);
+  const int x = localToGlobalIndex(getLocalIndex(id(0), 0), 0);
+  const int y = localToGlobalIndex(getLocalIndex(id(1), 1), 1);
+
+  md_.support_known_buffer_[support_addr] = 0;
+  md_.support_height_buffer_[support_addr] = std::numeric_limits<float>::quiet_NaN();
+
+  // 从上向下寻找最高原始占据体素；膨胀层不能作为地面证据。
+  for (int z = mp_.map_bound_max_idx_(2); z >= mp_.map_bound_min_idx_(2); --z)
+  {
+    const Eigen::Vector3i voxel_id(x, y, z);
+    if (md_.occupancy_buffer_[toAddress(voxel_id)] <= mp_.min_occupancy_log_)
+      continue;
+
+    Eigen::Vector3d voxel_pos;
+    indexToPos(voxel_id, voxel_pos);
+    md_.support_height_buffer_[support_addr] = static_cast<float>(voxel_pos(2));
+    md_.support_known_buffer_[support_addr] = 1;
+    break;
+  }
+}
+
+void GridMap::refreshSupportMap()
+{
+  if (!traversability_profile_.enabled || md_.support_dirty_buffer_.empty())
+    return;
+
+  for (int x_local = 0; x_local < mp_.map_voxel_num_(0); ++x_local)
+    for (int y_local = 0; y_local < mp_.map_voxel_num_(1); ++y_local)
+    {
+      const int support_addr = x_local * mp_.map_voxel_num_(1) + y_local;
+      if (!md_.support_dirty_buffer_[support_addr])
+        continue;
+
+      Eigen::Vector3i id(localToGlobalIndex(x_local, 0), localToGlobalIndex(y_local, 1),
+                          mp_.map_bound_min_idx_(2));
+      updateSupportColumn(id);
+      md_.support_dirty_buffer_[support_addr] = 0;
+    }
+}
+
+bool GridMap::isFootprintSupported(Eigen::Vector3d pos, double yaw)
+{
+  if (!traversability_profile_.enabled)
+    return true;
+
+  refreshSupportMap();
+  if (traversability_profile_.support_samples.empty())
+    return false;
+
+  const double cos_yaw = std::cos(yaw);
+  const double sin_yaw = std::sin(yaw);
+  const double expected_ground_z = pos(2) - traversability_profile_.body_height;
+  const double min_ground_z = expected_ground_z - std::max(0.0, traversability_profile_.max_drop);
+  const double max_ground_z = expected_ground_z + std::max(0.0, traversability_profile_.height_tolerance_up);
+  double lowest_ground_z = std::numeric_limits<double>::infinity();
+  double highest_ground_z = -std::numeric_limits<double>::infinity();
+
+  for (const Eigen::Vector2d& sample : traversability_profile_.support_samples)
+  {
+    Eigen::Vector3d support_pos = pos;
+    support_pos(0) += cos_yaw * sample(0) - sin_yaw * sample(1);
+    support_pos(1) += sin_yaw * sample(0) + cos_yaw * sample(1);
+    if (!isInMap(support_pos))
+      return false;
+
+    Eigen::Vector3i support_id;
+    posToIndex(support_pos, support_id);
+    const int support_addr = toSupportAddress(support_id);
+    if (!md_.support_known_buffer_[support_addr])
+      return false;
+
+    const double ground_z = md_.support_height_buffer_[support_addr];
+    if (ground_z < min_ground_z || ground_z > max_ground_z)
+      return false;
+
+    lowest_ground_z = std::min(lowest_ground_z, ground_z);
+    highest_ground_z = std::max(highest_ground_z, ground_z);
+  }
+
+  // 足迹内高差过大意味着轮式底盘跨越台阶或坡面时可能失稳。
+  return highest_ground_z - lowest_ground_z <= traversability_profile_.max_support_height_difference;
+}
+
+int GridMap::getTraversabilityOccupancy(Eigen::Vector3d pos, double yaw)
+{
+  const int collision = getInflateOccupancy(pos, yaw);
+  if (collision != 0)
+    return collision;
+  return isFootprintSupported(pos, yaw) ? 0 : 1;
+}
+
 void GridMap::resetAllMapData()
 {
   std::fill(md_.occupancy_buffer_.begin(), md_.occupancy_buffer_.end(), mp_.clamp_min_log_ - mp_.unknown_flag_);
   std::fill(md_.occupancy_buffer_inflate_.begin(), md_.occupancy_buffer_inflate_.end(), 0);
   std::fill(md_.occupancy_buffer_inflate_cnt_.begin(), md_.occupancy_buffer_inflate_cnt_.end(), 0);
+  std::fill(md_.support_height_buffer_.begin(), md_.support_height_buffer_.end(),
+            std::numeric_limits<float>::quiet_NaN());
+  std::fill(md_.support_known_buffer_.begin(), md_.support_known_buffer_.end(), 0);
+  std::fill(md_.support_dirty_buffer_.begin(), md_.support_dirty_buffer_.end(), 1);
   std::fill(md_.count_hit_and_miss_.begin(), md_.count_hit_and_miss_.end(), 0);
   std::fill(md_.count_hit_.begin(), md_.count_hit_.end(), 0);
   std::fill(md_.flag_rayend_.begin(), md_.flag_rayend_.end(), -1);
@@ -278,7 +444,10 @@ void GridMap::applyOccupancyUpdate(const Eigen::Vector3i& id, double new_log_odd
 
   md_.occupancy_buffer_[addr] = new_log_odds;
   if (was_occ != now_occ)
+  {
     updateInflation(id, now_occ ? 1 : -1);
+    markSupportColumnDirty(id);
+  }
 }
 
 void GridMap::resetCellByAddress(int addr)
@@ -286,7 +455,10 @@ void GridMap::resetCellByAddress(int addr)
   Eigen::Vector3i id_g;
   hashIdToGlobalIndex(addr, id_g);
   if (md_.occupancy_buffer_[addr] > mp_.min_occupancy_log_)
+  {
     updateInflation(id_g, -1);
+    markSupportColumnDirty(id_g);
+  }
 
   md_.occupancy_buffer_[addr] = mp_.clamp_min_log_ - mp_.unknown_flag_;
   md_.count_hit_[addr] = 0;
@@ -387,6 +559,9 @@ void GridMap::updateSlidingMap(const Eigen::Vector3d& center)
 
   for (int addr : clear_addrs)
   {
+    Eigen::Vector3i id_g;
+    hashIdToGlobalIndex(addr, id_g);
+    markSupportColumnDirty(id_g);
     md_.occupancy_buffer_[addr] = mp_.clamp_min_log_ - mp_.unknown_flag_;
     md_.occupancy_buffer_inflate_cnt_[addr] = 0;
     md_.occupancy_buffer_inflate_[addr] = 0;
@@ -686,6 +861,9 @@ void GridMap::raycastProcess()
                  mp_.clamp_max_log_);
     applyOccupancyUpdate(idx, new_log_odds);
   }
+
+  // 地图融合完成后批量刷新脏列，保证 A* 查询仅做常数时间查表。
+  refreshSupportMap();
 }
 
 Eigen::Vector3d GridMap::closetPointInMap(const Eigen::Vector3d &pt, const Eigen::Vector3d &ray_pos)

@@ -574,6 +574,30 @@ Visualization Manager:
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
+      Color: 255; 0; 0
+      Enabled: true
+      Head Diameter: 0.2
+      Head Length: 0.15
+      Length: 0.2
+      Line Style: Billboards
+      Line Width: 0.05
+      Name: scan_global_reference_path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 0; 0
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.03
+      Shaft Diameter: 0.05
+      Shaft Length: 0.05
+      Topic: /planning/global_reference_path
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
       Color: 0; 255; 255
       Enabled: true
       Head Diameter: 0.2

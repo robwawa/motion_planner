@@ -53,7 +53,7 @@ namespace scan_planner
     scan_planner::DataDisp data_disp_;
 
     /* parameters */
-    int navi_mode_; // 1 manual select, 2 hard code
+    int navi_mode_; // 1 manual select, 2 hard code, 3 reference path
     double no_replan_thresh_, replan_thresh_;
     std::vector<Eigen::Vector3d> preset_waypoints_;
     int waypoint_num_;
@@ -67,6 +67,7 @@ namespace scan_planner
     double reference_path_simplify_tolerance_;
     std::string reference_path_topic_;
     std::string reference_path_z_mode_;
+    std::string reference_path_mode_;
     std::string self_inflation_frame_id_;
 
     /* planning data */
@@ -89,6 +90,8 @@ namespace scan_planner
     bool have_final_yaw_{false};
     Eigen::Vector3d local_target_pt_, local_target_vel_;                     // local target state
     std::vector<Eigen::Vector3d> active_waypoints_;
+    std::vector<Eigen::Vector3d> reference_path_z_profile_;
+    double reference_path_z_progress_{0.0};
     int current_wp_;
 
     bool flag_escape_emergency_;
@@ -97,7 +100,7 @@ namespace scan_planner
     ros::NodeHandle node_;
     ros::Timer exec_timer_, safety_timer_;
     ros::Subscriber goal_sub_, odom_sub_, path_sub_, go2_execution_frozen_sub_;
-    ros::Publisher replan_pub_, new_pub_, bspline_pub_, data_disp_pub_, self_inflation_pub_;
+    ros::Publisher replan_pub_, new_pub_, bspline_pub_, data_disp_pub_, self_inflation_pub_, global_reference_path_pub_;
 
     /* helper functions */
     bool callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj); // front-end and back-end method
@@ -114,10 +117,13 @@ namespace scan_planner
     bool planGlobalTrajByWaypoints(const std::vector<Eigen::Vector3d> &waypoints);
     bool planNextWaypoint();
     bool isWaypointSequenceMode() const;
+    bool usePolylineRollingWindow() const;
+    double projectReferencePathProgress(const Eigen::Vector3d &point) const;
     bool adjustGlobalTargetIfOccupied();
     void getLocalTarget();
     void finishProcess();
     void publishSelfInflationMarker();
+    void publishGlobalReferencePath();
     double getOdomYaw() const;
     double estimateYawFromSegment(const Eigen::Vector3d &from, const Eigen::Vector3d &to) const;
     void updateLocalTrajTimeFreeze();

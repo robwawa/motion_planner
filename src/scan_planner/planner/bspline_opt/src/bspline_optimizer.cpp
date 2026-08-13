@@ -79,6 +79,7 @@ namespace scan_planner
       {
         Eigen::Vector3d sample_pt = a * init_points.col(i - 1) + (1 - a) * init_points.col(i);
         double sample_yaw = estimateSegmentYaw(init_points.col(i - 1), init_points.col(i));
+        // 仅以实体碰撞划分绕障段；支撑约束在后续 A* 候选节点中生效。
         occ = grid_map_->getInflateOccupancy(sample_pt, sample_yaw);
         // cout << setprecision(5);
         // cout << (a * init_points.col(i-1) + (1-a) * init_points.col(i)).transpose() << " occ1=" << occ << endl;

@@ -33,6 +33,26 @@ class GoalMarker:
             self.pose = msg.pose.pose
             self.insert_marker()
 
+    @staticmethod
+    def axis_quaternion(axis):
+        """Return a unit quaternion whose local X axis points along axis."""
+        half_sqrt = math.sqrt(0.5)
+        if axis == 'x':
+            return 0.0, 0.0, 0.0, 1.0
+        if axis == 'y':
+            return 0.0, 0.0, half_sqrt, half_sqrt
+        if axis == 'z':
+            return 0.0, -half_sqrt, 0.0, half_sqrt
+        raise ValueError('unknown marker axis: {}'.format(axis))
+
+    @staticmethod
+    def set_control_axis(control, axis):
+        qx, qy, qz, qw = GoalMarker.axis_quaternion(axis)
+        control.orientation.x = qx
+        control.orientation.y = qy
+        control.orientation.z = qz
+        control.orientation.w = qw
+
     def validated_goal_callback(self, msg):
         if msg.header.frame_id != self.frame:
             rospy.logwarn('[goal_interactive_marker] Ignore validated goal in frame %s (expected %s)',
@@ -60,30 +80,55 @@ class GoalMarker:
 
         visual = InteractiveMarkerControl()
         visual.name = 'menu_visual'
+        visual.orientation.w = 1.0
+        visual.orientation_mode = InteractiveMarkerControl.INHERIT
         visual.interaction_mode = InteractiveMarkerControl.MENU
         visual.always_visible = True
         body = Marker()
         body.type = Marker.SPHERE
         body.scale.x = body.scale.y = body.scale.z = 0.28
-        body.color.r, body.color.g, body.color.b, body.color.a = 1.0, 0.2, 0.1, 0.95
+        body.color.r, body.color.g, body.color.b, body.color.a = 0.62, 0.03, 0.02, 1.0
         visual.markers.append(body)
+
+        # A heading arrow is attached to the marker pose, so it rotates with
+        # the goal's yaw instead of staying fixed in the world frame.
+        heading = Marker()
+        heading.type = Marker.ARROW
+        heading.scale.x = 0.45
+        heading.scale.y = 0.07
+        heading.scale.z = 0.07
+        heading.color.r, heading.color.g = 0.72, 0.38
+        heading.color.b, heading.color.a = 0.02, 1.0
+        heading.pose.orientation.w = 1.0
+        visual.markers.append(heading)
         marker.controls.append(visual)
 
-        # Explicit X/Y/Z translation axes, plus yaw rotation.  Separate axes
-        # are more reliable than MOVE_PLANE across RViz versions.
-        for name, mode, orientation in (
-                ('move_x', InteractiveMarkerControl.MOVE_AXIS, (1.0, 0.0, 0.0, 1.0)),
-                ('move_y', InteractiveMarkerControl.MOVE_AXIS, (0.0, 1.0, 0.0, 1.0)),
-                ('move_z', InteractiveMarkerControl.MOVE_AXIS, (0.0, 0.0, 1.0, 1.0)),
-                ('rotate_yaw', InteractiveMarkerControl.ROTATE_AXIS, (0.0, 0.0, 1.0, 1.0))):
+        # Explicit X/Y/Z translation axes.  Separate axes are more reliable
+        # than MOVE_PLANE across RViz versions.
+        for name, mode, axis in (
+                ('move_x', InteractiveMarkerControl.MOVE_AXIS, 'x'),
+                ('move_y', InteractiveMarkerControl.MOVE_AXIS, 'y'),
+                ('move_z', InteractiveMarkerControl.MOVE_AXIS, 'z')):
             control = InteractiveMarkerControl()
             control.name = name
             control.description = name
             control.interaction_mode = mode
-            norm = math.sqrt(sum(value * value for value in orientation))
-            qx, qy, qz, qw = (value / norm for value in orientation)
-            control.orientation.w, control.orientation.x = qw, qx
-            control.orientation.y, control.orientation.z = qy, qz
+            control.orientation_mode = InteractiveMarkerControl.FIXED
+            self.set_control_axis(control, axis)
+            marker.controls.append(control)
+
+        # Add independent roll, pitch and yaw rings.  In particular, the Z
+        # axis ring lets the operator set the final heading of the goal.
+        for name, axis in (
+                ('rotate_roll', 'x'),
+                ('rotate_pitch', 'y'),
+                ('rotate_yaw', 'z')):
+            control = InteractiveMarkerControl()
+            control.name = name
+            control.description = name
+            control.interaction_mode = InteractiveMarkerControl.ROTATE_AXIS
+            control.orientation_mode = InteractiveMarkerControl.INHERIT
+            self.set_control_axis(control, axis)
             marker.controls.append(control)
 
         # A MENU control is required by RViz to expose MenuHandler entries in
@@ -91,6 +136,7 @@ class GoalMarker:
         menu_control = InteractiveMarkerControl()
         menu_control.name = 'goal_menu'
         menu_control.description = 'Plan / Reset to robot'
+        menu_control.orientation.w = 1.0
         menu_control.interaction_mode = InteractiveMarkerControl.MENU
         menu_control.always_visible = True
         marker.controls.append(menu_control)

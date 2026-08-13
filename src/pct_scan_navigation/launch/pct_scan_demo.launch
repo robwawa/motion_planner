@@ -1,5 +1,5 @@
 <launch>
-  <arg name="scene" default="Plaza" doc="PCT scene: Spiral, Building, or Plaza" />
+  <arg name="scene" default="Building" doc="PCT scene: Spiral, Building, or Plaza" />
   <!-- Keep SCAN's collision map aligned with the PCT scene.  The argument can
        still be overridden for custom PCD files, e.g. pcd_map_file:=/tmp/map.pcd. -->
   <arg name="pcd_map_file"
@@ -7,6 +7,8 @@
   <arg name="controller_mode" default="open_loop" doc="open_loop for 3D path playback; closed_loop for same-floor Twist control" />
   <arg name="use_gpu" default="false" />
   <arg name="optimize_path" default="false" doc="PCT optimized path; set false for raw A* path" />
+  <arg name="reference_path_mode" default="polyline_rolling_window"
+       doc="SCAN reference behavior: min_snap_single_pass or polyline_rolling_window" />
 
   <!-- PCT and SCAN consume the exact same static map coordinate system. -->
   <include file="$(find pct_planner)/launch/planner.launch">
@@ -29,6 +31,7 @@
     <arg name="controller_mode" value="$(arg controller_mode)" />
     <arg name="navigation_frame" value="map" />
     <arg name="reference_path_topic" value="/navigation/reference_path" />
+    <arg name="reference_path_mode" value="$(arg reference_path_mode)" />
     <arg name="use_pcd_map" value="true" />
     <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
     <arg name="init_x" value="5.0" />

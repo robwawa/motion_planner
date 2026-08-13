@@ -8,6 +8,7 @@
 #include <cmath>
 #include <geometry_msgs/PoseStamped.h>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <nav_msgs/Odometry.h>
 #include <queue>
@@ -105,6 +106,11 @@ struct MappingData {
   std::vector<int> occupancy_buffer_inflate_cnt_;
   vector<Eigen::Vector3i> inflate_offsets_;
 
+  // 二维支撑层：每列保存最高的可靠原始占据体素高度及其有效状态。
+  std::vector<float> support_height_buffer_;
+  std::vector<char> support_known_buffer_;
+  std::vector<char> support_dirty_buffer_;
+
   // raycast origin and sensor pose data
 
   Eigen::Vector3d ray_pos_;
@@ -146,6 +152,17 @@ struct MappingData {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
+// 轮式机器人对地形可通行性的描述。未来机器人可通过 setTraversabilityProfile
+// 提供任意足迹采样点，而不需要修改地图或 A* 的核心逻辑。
+struct TraversabilityProfile {
+  bool enabled{false};
+  double body_height{0.0};
+  double max_drop{0.0};
+  double height_tolerance_up{0.0};
+  double max_support_height_difference{std::numeric_limits<double>::infinity()};
+  std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> support_samples;
+};
+
 class GridMap {
 public:
   GridMap() {}
@@ -169,6 +186,9 @@ public:
   inline int getOccupancy(Eigen::Vector3d pos);
   inline int getOccupancy(Eigen::Vector3i id);
   inline int getInflateOccupancy(Eigen::Vector3d pos, double yaw);
+  int getTraversabilityOccupancy(Eigen::Vector3d pos, double yaw);
+  bool isFootprintSupported(Eigen::Vector3d pos, double yaw);
+  void setTraversabilityProfile(const TraversabilityProfile& profile);
 
   inline void boundIndex(Eigen::Vector3i& id);
   inline bool isUnknown(const Eigen::Vector3i& id);
@@ -201,6 +221,7 @@ public:
 private:
   MappingParameters mp_;
   MappingData md_;
+  TraversabilityProfile traversability_profile_;
 
   // get depth image and sensor pose
   void depthPoseCallback(const sensor_msgs::ImageConstPtr& img,
@@ -222,6 +243,8 @@ private:
   inline int getLocalIndex(int id, int dim) const;
   inline int toAddressLocal(const Eigen::Vector3i& id_l) const;
   inline int toAddressLocal(int x, int y, int z) const;
+  inline int toSupportAddress(const Eigen::Vector3i& id) const;
+  inline int localToGlobalIndex(int local_id, int dim) const;
   int setCacheOccupancy(Eigen::Vector3d pos, int occ);
   Eigen::Vector3d closetPointInMap(const Eigen::Vector3d& pt, const Eigen::Vector3d& ray_pos);
   void updateSlidingMap(const Eigen::Vector3d& center);
@@ -232,6 +255,10 @@ private:
   void hashIdToGlobalIndex(int addr, Eigen::Vector3i& id_g) const;
   void applyOccupancyUpdate(const Eigen::Vector3i& id, double new_log_odds);
   void rebuildInflationOffsets();
+  void rebuildSupportSamples(const string& model);
+  void markSupportColumnDirty(const Eigen::Vector3i& id);
+  void updateSupportColumn(const Eigen::Vector3i& id);
+  void refreshSupportMap();
   void updateInflation(const Eigen::Vector3i& id, int delta, const std::vector<char>* ignore_mask = nullptr);
   void updateInflationLayer(const Eigen::Vector3i& id, int delta,
                             const vector<Eigen::Vector3i>& offsets,
@@ -290,6 +317,16 @@ inline int GridMap::toAddressLocal(const Eigen::Vector3i& id_l) const {
 
 inline int GridMap::toAddressLocal(int x, int y, int z) const {
   return x * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) + y * mp_.map_voxel_num_(2) + z;
+}
+
+inline int GridMap::toSupportAddress(const Eigen::Vector3i& id) const {
+  return getLocalIndex(id(0), 0) * mp_.map_voxel_num_(1) + getLocalIndex(id(1), 1);
+}
+
+inline int GridMap::localToGlobalIndex(int local_id, int dim) const {
+  const int min_local = getLocalIndex(mp_.map_bound_min_idx_(dim), dim);
+  const int delta = (local_id - min_local + mp_.map_voxel_num_(dim)) % mp_.map_voxel_num_(dim);
+  return mp_.map_bound_min_idx_(dim) + delta;
 }
 
 inline void GridMap::boundIndex(Eigen::Vector3i& id) {

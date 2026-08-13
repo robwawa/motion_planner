@@ -44,7 +44,8 @@ namespace scan_planner
     }
   };
 
-  class BsplineOptimizer
+  // 显式导出优化器公共接口，保证 catkin 动态库重建后可被规划节点链接。
+  class __attribute__((visibility("default"))) BsplineOptimizer
   {
 
   public:

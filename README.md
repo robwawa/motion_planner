@@ -49,8 +49,8 @@ roslaunch scan_planner rviz.launch
 
 首期集成使用同一份 Building PCD：PCT 通过 `/pct/plan_path` Action 生成全局多层路径，
 `navigation_manager` 将其校验、抽稀后发布到 SCAN 的
-`/navigation/reference_path`。所有路径均以 `map` 为坐标系，z 表示
-`base_link` 高度。
+`/navigation/reference_path`。所有路径均以 `map` 为坐标系；路径 Z 的语义由
+`reference_path_z_mode` 指定（默认 `base`）。
 
 ```bash
 source /opt/ros/noetic/setup.bash
@@ -68,6 +68,21 @@ rostopic pub -1 /goal_pose_3d geometry_msgs/PoseStamped \
 `open_loop` 用于验证多层 z 轨迹；`closed_loop` 适合验证同楼层的
 `/cmd_vel` 跟踪与局部避障。现有运动学仿真器不会根据地形主动更新 z，
 因此后者不应作为楼梯动力学验证。
+
+### 模式 3 的参考路径高度处理
+
+`navi_mode:=3` 是 PCT 全局路径到 SCAN 局部避障的跟踪模式。SCAN 保持自身的
+XY 局部规划和三维碰撞优化，但会将局部 B 样条的 Z 初值按机器人在 PCT 路径上的
+前进距离采样；因此楼梯、坡面等中间高度变化不会再被简单地按局部起终点线性连接。
+
+- `reference_path_z_mode:=base`：输入路径的 Z 已是机身基座高度，直接使用；
+- `reference_path_z_mode:=ground`：输入路径的 Z 是地面高度，SCAN 在接收时加一次
+  `grid_map/body_height`（默认 `0.4 m`）。
+
+上述高度参考只用于初始化，SCAN 的碰撞避障仍可按局部点云上、下调整轨迹。该优化
+仅在模式 3 生效；模式 1（RViz 目标）和模式 2（预设航点）继续使用原有的起终点线性
+Z 初始化。`reference_path_mode:=min_snap_single_pass` 与
+`reference_path_mode:=polyline_rolling_window` 都支持该行为。
 
 ## 目录布局
 

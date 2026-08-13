@@ -105,7 +105,11 @@ class TomogramPlanner(object):
         if not self._valid_index(self.start_idx) or not self._valid_index(self.end_idx):
             raise ValueError('Start or goal is outside tomogram bounds')
 
-        if not self.planner.plan(self.start_idx, self.end_idx, True):
+        # Keep the ROS-level optimize_path switch aligned with the native
+        # planner.  Passing True unconditionally entered GPMP even for raw
+        # A* requests; a same-cell start/goal then violated GPMP's minimum
+        # two-point path precondition and aborted the whole PCT process.
+        if not self.planner.plan(self.start_idx, self.end_idx, bool(optimize_path)):
             return None
         path_finder: a_star.Astar = self.planner.get_path_finder()
         path = path_finder.get_result_matrix()

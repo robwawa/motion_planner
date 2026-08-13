@@ -25,6 +25,13 @@ bool OfflineElePlanner::Plan(const Eigen::Vector3i& start,
 
   if (optimize) {
     path_ = path_finder_.GetPathPoints();
+    // GPMP sub-sampling requires a segment.  A valid A* search can still
+    // consist of one cell when the snapped start and goal coincide, so do not
+    // let its assert() terminate the ROS action server.
+    if (path_.size() < 2) {
+      printf("A star path has fewer than two points; skip optimization.\n");
+      return false;
+    }
     path_.front().ref_v = 1;
     path_.back().ref_v = 1;
 
