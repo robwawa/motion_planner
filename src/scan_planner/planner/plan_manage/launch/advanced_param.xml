@@ -51,6 +51,19 @@
     <param name="fsm/reference_path_simplify_tolerance" value="$(arg reference_path_simplify_tolerance)" type="double"/>
     <param name="fsm/reference_path_mode" value="$(arg reference_path_mode)" type="str"/>
 
+    <!-- 自适应前视：仅 REFERENCE_PATH + polyline_rolling_window 生效。 -->
+    <param name="fsm/adaptive_horizon_enabled" value="true" type="bool"/>
+    <!-- 自适应前视：最小前视距离 -->
+    <param name="fsm/adaptive_horizon_min" value="3.5" type="double"/>
+    <!-- 自适应前视：最大前视距离 -->
+    <param name="fsm/adaptive_horizon_max" value="8.0" type="double"/>
+    <!-- 自适应前视：曲率增益 -->
+    <param name="fsm/adaptive_horizon_curvature_gain" value="2.0" type="double"/>
+    <!-- 自适应前视：平滑坡度变化率增益 -->
+    <param name="fsm/adaptive_horizon_slope_gain" value="1.0" type="double"/>
+    <!-- 自适应前视：坡度平滑空间窗口（m） -->
+    <param name="fsm/adaptive_horizon_slope_smoothing_window" value="0.8" type="double"/>
+
     <!-- sliding map -->
     <param name="grid_map/resolution" value="0.05" />
     <param name="grid_map/sliding_map_size_x" value="10.0" />

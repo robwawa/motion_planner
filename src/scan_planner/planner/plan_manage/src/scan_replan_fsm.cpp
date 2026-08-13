@@ -138,6 +138,13 @@ namespace scan_planner
     nh.param("fsm/reference_path_topic", reference_path_topic_, std::string("/initial_path"));
     nh.param("fsm/reference_path_z_mode", reference_path_z_mode_, std::string("base"));
     nh.param("fsm/reference_path_mode", reference_path_mode_, std::string("min_snap_single_pass"));
+    nh.param("fsm/adaptive_horizon_enabled", adaptive_horizon_enabled_, true);
+    nh.param("fsm/adaptive_horizon_min", adaptive_horizon_min_, 1.25);
+    nh.param("fsm/adaptive_horizon_max", adaptive_horizon_max_, 4.5);
+    nh.param("fsm/adaptive_horizon_curvature_gain", adaptive_horizon_curvature_gain_, 2.0);
+    nh.param("fsm/adaptive_horizon_slope_gain", adaptive_horizon_slope_gain_, 1.0);
+    nh.param("fsm/adaptive_horizon_slope_smoothing_window",
+             adaptive_horizon_slope_smoothing_window_, 0.8);
     nh.param("grid_map/frame_id", self_inflation_frame_id_, std::string("world"));
 
     if (reference_path_z_mode_ != "base" && reference_path_z_mode_ != "ground")
@@ -158,6 +165,14 @@ namespace scan_planner
     {
       ROS_ERROR("[SCANReplanFSM] fsm/reference_path_mode must be 'min_snap_single_pass' or "
                 "'polyline_rolling_window', got '%s'.", reference_path_mode_.c_str());
+      ros::shutdown();
+      return;
+    }
+    if (adaptive_horizon_min_ <= 0.0 || adaptive_horizon_max_ < adaptive_horizon_min_ ||
+        adaptive_horizon_curvature_gain_ < 0.0 || adaptive_horizon_slope_gain_ < 0.0 ||
+        adaptive_horizon_slope_smoothing_window_ <= 0.0)
+    {
+      ROS_ERROR("[SCANReplanFSM] Invalid adaptive horizon parameters.");
       ros::shutdown();
       return;
     }
@@ -1238,7 +1253,9 @@ namespace scan_planner
     const double max_vel = planner_manager_->pp_.max_vel_;
     const double max_acc = planner_manager_->pp_.max_acc_;
     const double duration = planner_manager_->global_data_.global_duration_;
-    double t_step = max_vel > 1e-6 ? planning_horizon_ / 20.0 / max_vel : 0.01;
+    const bool use_adaptive_horizon = adaptive_horizon_enabled_ && usePolylineRollingWindow();
+    const double sampling_horizon = use_adaptive_horizon ? adaptive_horizon_max_ : planning_horizon_;
+    double t_step = max_vel > 1e-6 ? sampling_horizon / 20.0 / max_vel : 0.01;
     t_step = std::max(t_step, 0.01);
 
     double t_proj = 0.0;
@@ -1255,25 +1272,161 @@ namespace scan_planner
     }
 
     double target_t = duration;
+    double target_distance = planning_horizon_;
     double total_dist = 0.0;
     bool target_found = false;
     Eigen::Vector3d prev_pos = planner_manager_->global_data_.getPosition(t_proj);
     local_target_pt_ = end_pt_;
 
-    for (double t = t_proj; t < duration; t += t_step)
+    if (use_adaptive_horizon)
     {
-      Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(t);
-      total_dist += (pos_t - prev_pos).norm();
-      if (total_dist >= planning_horizon_)
+      struct PathSample
       {
-        local_target_pt_ = pos_t;
-        target_t = t;
-        target_found = true;
-        break;
+        double t;
+        double distance;
+        Eigen::Vector3d position;
+      };
+
+      std::vector<PathSample> samples;
+      samples.push_back({t_proj, 0.0, prev_pos});
+      double path_distance = 0.0;
+      for (double t = t_proj + t_step; t <= duration + 1e-6; t += t_step)
+      {
+        const double sample_t = std::min(t, duration);
+        const Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(sample_t);
+        path_distance += (pos_t - samples.back().position).norm();
+        samples.push_back({sample_t, path_distance, pos_t});
+
+        if (sample_t >= duration - 1e-6)
+          break;
       }
-      prev_pos = pos_t;
+
+      const auto xy_direction = [](const Eigen::Vector3d &from, const Eigen::Vector3d &to) -> Eigen::Vector2d {
+        const Eigen::Vector2d delta = (to - from).head<2>();
+        const double length = delta.norm();
+        if (length <= 1e-6)
+          return Eigen::Vector2d::Zero();
+        return delta / length;
+      };
+
+      double max_curvature = 0.0;
+      for (size_t i = 1; i + 1 < samples.size(); ++i)
+      {
+        if (samples[i].distance > adaptive_horizon_max_ + t_step)
+          break;
+
+        const Eigen::Vector2d direction_in = xy_direction(samples[i - 1].position, samples[i].position);
+        const Eigen::Vector2d direction_out = xy_direction(samples[i].position, samples[i + 1].position);
+        if (direction_in.isZero(1e-6) || direction_out.isZero(1e-6))
+          continue;
+
+        const double dot = std::max(-1.0, std::min(1.0, direction_in.dot(direction_out)));
+        const double turn_angle = std::acos(dot);
+        const double average_distance = 0.5 *
+            ((samples[i].distance - samples[i - 1].distance) +
+             (samples[i + 1].distance - samples[i].distance));
+        const double curvature = average_distance > 1e-6 ? turn_angle / average_distance : 0.0;
+        max_curvature = std::max(max_curvature, curvature);
+      }
+
+      std::vector<double> smoothed_grades(samples.size(), std::numeric_limits<double>::quiet_NaN());
+      const double half_slope_window = 0.5 * adaptive_horizon_slope_smoothing_window_;
+      for (size_t i = 0; i < samples.size(); ++i)
+      {
+        if (samples[i].distance > adaptive_horizon_max_ + half_slope_window)
+          break;
+
+        double sum_s = 0.0, sum_z = 0.0, sum_ss = 0.0, sum_sz = 0.0;
+        size_t count = 0;
+        for (size_t j = 0; j < samples.size(); ++j)
+        {
+          const double local_s = samples[j].distance - samples[i].distance;
+          if (std::fabs(local_s) > half_slope_window)
+            continue;
+          sum_s += local_s;
+          sum_z += samples[j].position.z();
+          sum_ss += local_s * local_s;
+          sum_sz += local_s * samples[j].position.z();
+          ++count;
+        }
+        const double denominator = static_cast<double>(count) * sum_ss - sum_s * sum_s;
+        if (count >= 3 && denominator > 1e-8)
+          smoothed_grades[i] = (static_cast<double>(count) * sum_sz - sum_s * sum_z) / denominator;
+      }
+
+      double max_grade_rate = 0.0;
+      for (size_t i = 1; i + 1 < samples.size(); ++i)
+      {
+        if (samples[i].distance > adaptive_horizon_max_)
+          break;
+        if (!std::isfinite(smoothed_grades[i - 1]) || !std::isfinite(smoothed_grades[i + 1]))
+          continue;
+        const double span = samples[i + 1].distance - samples[i - 1].distance;
+        if (span > 1e-6)
+          max_grade_rate = std::max(max_grade_rate,
+              std::fabs(smoothed_grades[i + 1] - smoothed_grades[i - 1]) / span);
+      }
+
+      const double route_distance = adaptive_horizon_max_ /
+          (1.0 + adaptive_horizon_curvature_gain_ * max_curvature +
+           adaptive_horizon_slope_gain_ * max_grade_rate);
+      target_distance = std::max(adaptive_horizon_min_,
+          std::min(adaptive_horizon_max_, route_distance));
+
+      // Keep the original implicit end-point behavior: if the remaining path
+      // ends before target_distance, use the final global-trajectory point.
+      local_target_pt_ = samples.front().position;
+      target_t = samples.front().t;
+      bool target_interpolated = false;
+      for (size_t i = 1; i < samples.size(); ++i)
+      {
+        const PathSample &previous = samples[i - 1];
+        const PathSample &next = samples[i];
+        if (next.distance >= target_distance - 1e-6)
+        {
+          const double segment_distance = next.distance - previous.distance;
+          const double alpha = segment_distance > 1e-6 ?
+              std::max(0.0, std::min(1.0,
+                  (target_distance - previous.distance) / segment_distance)) : 0.0;
+          local_target_pt_ = previous.position + alpha * (next.position - previous.position);
+          target_t = previous.t + alpha * (next.t - previous.t);
+          target_interpolated = true;
+          break;
+        }
+      }
+      if (!target_interpolated)
+      {
+        local_target_pt_ = samples.back().position;
+        target_t = samples.back().t;
+      }
+      target_found = target_t > t_proj + 1e-6;
+
+      const char *limiter = route_distance <= adaptive_horizon_min_ ? "min" :
+                            (route_distance >= adaptive_horizon_max_ ? "max" : "route");
+
+      ROS_INFO_THROTTLE(1.0,
+                        "[adaptive horizon] L=%.2f (route=%.2f curvature=%.3f grade_rate=%.3f window=%.2f), limiter=%s",
+                        target_distance, route_distance, max_curvature, max_grade_rate,
+                        adaptive_horizon_slope_smoothing_window_, limiter);
     }
-    planner_manager_->global_data_.last_progress_time_ = target_found ? target_t : duration;
+    else
+    {
+      for (double t = t_proj; t < duration; t += t_step)
+      {
+        Eigen::Vector3d pos_t = planner_manager_->global_data_.getPosition(t);
+        total_dist += (pos_t - prev_pos).norm();
+        if (total_dist >= planning_horizon_)
+        {
+          local_target_pt_ = pos_t;
+          target_t = t;
+          target_found = true;
+          break;
+        }
+        prev_pos = pos_t;
+      }
+    }
+    planner_manager_->global_data_.last_progress_time_ =
+        use_adaptive_horizon ? target_t : (target_found ? target_t : duration);
 
     auto targetOccupancy = [&](const Eigen::Vector3d &pt) {
       return planner_manager_->grid_map_->getInflateOccupancy(pt, estimateYawFromSegment(odom_pos_, pt));
@@ -1284,10 +1437,11 @@ namespace scan_planner
       bool found_free_target = false;
       double adjusted_t = target_t;
 
-      for (double dt = 0.0; dt <= planner_manager_->global_data_.global_duration_; dt += t_step)
+      const double target_search_limit = use_adaptive_horizon ? target_t : duration;
+      for (double dt = 0.0; dt <= duration; dt += t_step)
       {
         double t_forward = target_t + dt;
-        if (t_forward <= planner_manager_->global_data_.global_duration_)
+        if (t_forward <= target_search_limit + 1e-6)
         {
           Eigen::Vector3d pt = planner_manager_->global_data_.getPosition(t_forward);
           if (targetOccupancy(pt) == 0)

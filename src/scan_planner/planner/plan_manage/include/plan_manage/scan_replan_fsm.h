@@ -68,6 +68,12 @@ namespace scan_planner
     std::string reference_path_topic_;
     std::string reference_path_z_mode_;
     std::string reference_path_mode_;
+    bool adaptive_horizon_enabled_;
+    double adaptive_horizon_min_;
+    double adaptive_horizon_max_;
+    double adaptive_horizon_curvature_gain_;
+    double adaptive_horizon_slope_gain_;
+    double adaptive_horizon_slope_smoothing_window_;
     std::string self_inflation_frame_id_;
 
     /* planning data */
