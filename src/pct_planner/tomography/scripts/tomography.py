@@ -38,9 +38,12 @@ def create_tomogram(scene_cfg, backend):
 
 
 class Tomography(object):
-    def __init__(self, cfg, scene_cfg, backend='auto'):
+    def __init__(self, cfg, scene_cfg, backend='auto', pcd_file=None,
+                 tomogram_name=None):
         self.export_dir = rsg_root + cfg.map.export_dir
-        self.pcd_file = scene_cfg.pcd.file_name
+        self.pcd_file = pcd_file or scene_cfg.pcd.file_name
+        self.tomogram_name = tomogram_name or os.path.splitext(
+            os.path.basename(self.pcd_file))[0]
         self.resolution = scene_cfg.map.resolution
         self.ground_h = scene_cfg.map.ground_h
         self.slice_dh = scene_cfg.map.slice_dh
@@ -73,8 +76,12 @@ class Tomography(object):
         self.tomogram_pub = rospy.Publisher(tomogram_topic, PointCloud2, latch=True, queue_size=1)
 
     def loadPCD(self, pcd_file):
-        pcd = o3d.io.read_point_cloud(rsg_root + "/rsc/pcd/" + pcd_file)
+        path = pcd_file if os.path.isabs(pcd_file) else os.path.join(
+            rsg_root, "rsc", "pcd", pcd_file)
+        pcd = o3d.io.read_point_cloud(path)
         points = np.asarray(pcd.points).astype(np.float32)
+        if points.size == 0:
+            raise RuntimeError("cannot load point cloud: {}".format(path))
         rospy.loginfo("PCD points: %d", points.shape[0])
 
         if points.shape[1] > 3:
@@ -131,8 +138,9 @@ class Tomography(object):
 
         self.n_slice = layers_g.shape[0]
 
-        map_file = os.path.splitext(self.pcd_file)[0]
-        self.exportTomogram(np.stack((layers_t, trav_grad_x, trav_grad_y, layers_g, layers_c)), map_file)
+        self.exportTomogram(
+            np.stack((layers_t, trav_grad_x, trav_grad_y, layers_g, layers_c)),
+            self.tomogram_name)
 
         self.initROS()
         self.publishPoints(points)
@@ -220,8 +228,13 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--scene', type=str, required=True, help='Name of the scene. Available: [\'Spiral\', \'Building\', \'Plaza\']')
+    parser.add_argument('--scene', type=str, required=True,
+                        help='Processing parameter scene: Spiral, Building, or Plaza')
     parser.add_argument('--backend', choices=('auto', 'cuda', 'cpu'), default='auto', help='Tomogram backend (default: auto)')
+    parser.add_argument('--pcd-file', default=None,
+                        help='PCD path relative to rsc/pcd or an absolute path')
+    parser.add_argument('--tomogram-name', default=None,
+                        help='Output basename under rsc/tomogram, without .pickle')
     args = parser.parse_args()
 
     cfg = Config()
@@ -229,6 +242,7 @@ if __name__ == '__main__':
 
     rospy.init_node('pointcloud_tomography', anonymous=True)
 
-    mapping = Tomography(cfg, scene_cfg, args.backend)
+    mapping = Tomography(cfg, scene_cfg, args.backend, args.pcd_file,
+                          args.tomogram_name)
 
     rospy.spin()

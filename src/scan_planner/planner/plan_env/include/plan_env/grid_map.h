@@ -259,6 +259,8 @@ private:
   void markSupportColumnDirty(const Eigen::Vector3i& id);
   void updateSupportColumn(const Eigen::Vector3i& id);
   void refreshSupportMap();
+  bool findSupportHeight(const Eigen::Vector3i& support_id, double expected_ground_z,
+                         double& ground_z);
   void updateInflation(const Eigen::Vector3i& id, int delta, const std::vector<char>* ignore_mask = nullptr);
   void updateInflationLayer(const Eigen::Vector3i& id, int delta,
                             const vector<Eigen::Vector3i>& offsets,

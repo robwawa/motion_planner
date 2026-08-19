@@ -19,3 +19,6 @@ Makefile
 /.catkin_tools/
 /.ros/
 test_results/
+
+# PCT runtime resources, maps, and generated tomograms are local artifacts.
+/src/pct_planner/rsc/

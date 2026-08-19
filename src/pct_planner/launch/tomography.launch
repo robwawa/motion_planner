@@ -1,8 +1,11 @@
 <launch>
   <arg name="scene" default="Building" doc="Spiral, Building, or Plaza" />
   <arg name="backend" default="auto" doc="auto, cpu, or cuda" />
+  <!-- PCD path is relative to pct_planner/rsc/pcd or absolute. -->
+  <arg name="pcd_map_file" default="$(eval {'Spiral': 'spiral0.3_2.pcd', 'Building': 'building2_9.pcd', 'Plaza': 'plaza3_10.pcd'}[arg('scene')])" />
+  <arg name="tomogram_name" default="$(eval {'Spiral': 'spiral0.3_2', 'Building': 'building2_9', 'Plaza': 'plaza3_10'}[arg('scene')])" />
 
   <node pkg="pct_planner" type="pct_tomography_node.py"
         name="pointcloud_tomography" output="screen"
-        args="--scene $(arg scene) --backend $(arg backend)" />
+        args="--scene $(arg scene) --backend $(arg backend) --pcd-file $(arg pcd_map_file) --tomogram-name $(arg tomogram_name)" />
 </launch>

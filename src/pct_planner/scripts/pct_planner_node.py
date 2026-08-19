@@ -53,7 +53,7 @@ class PCTActionServer:
     TOMOGRAMS = {'Spiral': 'spiral0.3_2', 'Building': 'building2_9', 'Plaza': 'plaza3_10'}
 
     def __init__(self, scene, navigation_frame, body_height, layer_tolerance, optimize_path,
-                 endpoint_snap_radius):
+                 endpoint_snap_radius, tomogram_name=None, wait_timeout=300.0):
         if scene not in self.TOMOGRAMS:
             raise ValueError('Unknown scene: {}'.format(scene))
         package_root = package_path()
@@ -67,13 +67,23 @@ class PCTActionServer:
         self.optimize_path = optimize_path
         self.path_pub = rospy.Publisher('/pct/global_path', Path, latch=True, queue_size=1)
         self.planner = TomogramPlanner(Config())
-        self.planner.loadTomogram(self.TOMOGRAMS[scene])
+        self.tomogram_name = tomogram_name or self.TOMOGRAMS[scene]
+        tomogram_path = os.path.join(package_root, 'rsc', 'tomogram',
+                                     self.tomogram_name + '.pickle')
+        deadline = time.monotonic() + max(0.0, float(wait_timeout))
+        while not os.path.isfile(tomogram_path):
+            if time.monotonic() >= deadline:
+                raise RuntimeError('timed out waiting for tomogram: {}'.format(tomogram_path))
+            rospy.loginfo_throttle(5.0, '[pct_planner] waiting for tomogram: %s', tomogram_path)
+            time.sleep(0.2)
+        self.planner.loadTomogram(self.tomogram_name)
         self.endpoint_snap_radius_cells = max(
             0, int(math.ceil(float(endpoint_snap_radius) / self.planner.resolution)))
         self.server = actionlib.SimpleActionServer(
             '/pct/plan_path', PlanPath3DAction, execute_cb=self.execute, auto_start=False)
         self.server.start()
-        rospy.loginfo('[pct_planner] ready: scene=%s frame=%s', scene, navigation_frame)
+        rospy.loginfo('[pct_planner] ready: scene=%s tomogram=%s frame=%s',
+                      scene, self.tomogram_name, navigation_frame)
 
     def feedback(self, stage):
         self.server.publish_feedback(PlanPath3DFeedback(stage=stage))
@@ -225,6 +235,7 @@ class PCTActionServer:
 def main():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--scene', default='Building')
+    parser.add_argument('--tomogram-name', default=None)
     args, _ = parser.parse_known_args()
     rospy.init_node('pct_planner')
     scene = rospy.get_param('~scene', args.scene)
@@ -232,7 +243,9 @@ def main():
                     rospy.get_param('~body_height', 0.4),
                     rospy.get_param('~layer_height_tolerance', 0.75),
                     rospy.get_param('~optimize_path', True),
-                    rospy.get_param('~endpoint_snap_radius', 1.5))
+                    rospy.get_param('~endpoint_snap_radius', 1.5),
+                    rospy.get_param('~tomogram_name', args.tomogram_name),
+                    rospy.get_param('~wait_timeout', 300.0))
     rospy.spin()
 
 

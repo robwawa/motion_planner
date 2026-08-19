@@ -76,8 +76,9 @@
     <param name="grid_map/obstacles_inflation_z_up" value="0.0" />  
     <param name="grid_map/obstacles_inflation_z_down" value="0.0" />
     <param name="grid_map/body_height" value="0.4" />
+
     <!-- 地面支撑约束：SCAN 显式启用，其他机器人可在各自配置中关闭或替换足迹。 -->
-    <param name="grid_map/traversability_enabled" value="true" />
+    <param name="grid_map/traversability_enabled" value="false" />
     <param name="grid_map/support_model" value="double_cylinder" />
     <param name="grid_map/support_body_height" value="0.4" />
     <param name="grid_map/support_max_drop" value="0.15" />

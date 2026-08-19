@@ -318,20 +318,66 @@ void GridMap::refreshSupportMap()
     }
 }
 
+bool GridMap::findSupportHeight(const Eigen::Vector3i& support_id,
+                                const double expected_ground_z,
+                                double& ground_z)
+{
+  const double min_ground_z = expected_ground_z -
+      std::max(0.0, traversability_profile_.max_drop);
+  const double max_ground_z = expected_ground_z +
+      std::max(0.0, traversability_profile_.height_tolerance_up);
+  int min_z = static_cast<int>(std::floor(min_ground_z * mp_.resolution_inv_));
+  int max_z = static_cast<int>(std::floor(max_ground_z * mp_.resolution_inv_));
+  min_z = std::max(min_z, mp_.map_bound_min_idx_(2));
+  max_z = std::min(max_z, mp_.map_bound_max_idx_(2));
+  if (min_z > max_z)
+    return false;
+
+  bool has_lower = false;
+  double best_lower = -std::numeric_limits<double>::infinity();
+  bool has_upper = false;
+  double best_upper = std::numeric_limits<double>::infinity();
+  for (int z = min_z; z <= max_z; ++z)
+  {
+    const Eigen::Vector3i voxel_id(support_id(0), support_id(1), z);
+    if (md_.occupancy_buffer_[toAddress(voxel_id)] <= mp_.min_occupancy_log_)
+      continue;
+
+    Eigen::Vector3d voxel_pos;
+    indexToPos(voxel_id, voxel_pos);
+    // Prefer the closest surface at or below the expected ground.  A small
+    // half-voxel allowance prevents quantisation from rejecting a flat floor.
+    if (voxel_pos(2) <= expected_ground_z + 0.5 * mp_.resolution_)
+    {
+      if (!has_lower || voxel_pos(2) > best_lower)
+      {
+        best_lower = voxel_pos(2);
+        has_lower = true;
+      }
+    }
+    else if (!has_upper || voxel_pos(2) < best_upper)
+    {
+      best_upper = voxel_pos(2);
+      has_upper = true;
+    }
+  }
+
+  if (has_lower) { ground_z = best_lower; return true; }
+  if (has_upper) { ground_z = best_upper; return true; }
+  return false;
+}
+
 bool GridMap::isFootprintSupported(Eigen::Vector3d pos, double yaw)
 {
   if (!traversability_profile_.enabled)
     return true;
 
-  refreshSupportMap();
   if (traversability_profile_.support_samples.empty())
     return false;
 
   const double cos_yaw = std::cos(yaw);
   const double sin_yaw = std::sin(yaw);
   const double expected_ground_z = pos(2) - traversability_profile_.body_height;
-  const double min_ground_z = expected_ground_z - std::max(0.0, traversability_profile_.max_drop);
-  const double max_ground_z = expected_ground_z + std::max(0.0, traversability_profile_.height_tolerance_up);
   double lowest_ground_z = std::numeric_limits<double>::infinity();
   double highest_ground_z = -std::numeric_limits<double>::infinity();
 
@@ -345,12 +391,8 @@ bool GridMap::isFootprintSupported(Eigen::Vector3d pos, double yaw)
 
     Eigen::Vector3i support_id;
     posToIndex(support_pos, support_id);
-    const int support_addr = toSupportAddress(support_id);
-    if (!md_.support_known_buffer_[support_addr])
-      return false;
-
-    const double ground_z = md_.support_height_buffer_[support_addr];
-    if (ground_z < min_ground_z || ground_z > max_ground_z)
+    double ground_z;
+    if (!findSupportHeight(support_id, expected_ground_z, ground_z))
       return false;
 
     lowest_ground_z = std::min(lowest_ground_z, ground_z);
