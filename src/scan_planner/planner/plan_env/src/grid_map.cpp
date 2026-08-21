@@ -1,6 +1,7 @@
 #include "plan_env/grid_map.h"
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <tf/transform_broadcaster.h>
 
@@ -23,11 +24,32 @@ void GridMap::initMap(ros::NodeHandle &nh)
   node_.param("grid_map/double_cylinder_radius", mp_.double_cylinder_radius_, -1.0);
   node_.param("grid_map/double_cylinder_offset", mp_.double_cylinder_offset_, 0.0);
   node_.param("grid_map/traversability_enabled", traversability_profile_.enabled, false);
+  // terrain_check is the explicit public interface.  Preserve the prior
+  // traversability_enabled spelling for configurations written before PCT.
+  node_.param("terrain_check/use_scan_support", traversability_profile_.enabled,
+              traversability_profile_.enabled);
   node_.param("grid_map/support_body_height", traversability_profile_.body_height, 0.0);
   node_.param("grid_map/support_max_drop", traversability_profile_.max_drop, 0.0);
   node_.param("grid_map/support_height_tolerance_up", traversability_profile_.height_tolerance_up, 0.0);
   node_.param("grid_map/support_max_height_difference",
               traversability_profile_.max_support_height_difference, 0.0);
+  node_.param("terrain_check/use_pct_traversability", pct_traversability_.enabled, false);
+  node_.param("pct_traversability/topic", pct_traversability_.topic, pct_traversability_.topic);
+  node_.param("pct_traversability/cost_threshold", pct_traversability_.cost_threshold, 20.0);
+  // Prefer the public PCT profile when it is loaded.  The private parameter
+  // above remains as a backward-compatible fallback for standalone use.
+  double public_cost_threshold = 0.0;
+  if (node_.getParam("/pct/traversability/cost_threshold", public_cost_threshold))
+  {
+    if (public_cost_threshold < 0.0)
+      throw std::runtime_error("invalid public PCT cost threshold");
+    pct_traversability_.cost_threshold = public_cost_threshold;
+  }
+  node_.param("pct_traversability/max_height_error", pct_traversability_.max_height_error, 0.20);
+  node_.param("pct_traversability/unknown_as_obstacle",
+              pct_traversability_.unknown_as_obstacle, true);
+  node_.param("pct_traversability/debug_rejection_stats",
+              pct_traversability_.debug_rejection_stats, false);
   string support_model;
   node_.param("grid_map/support_model", support_model, string("double_cylinder"));
   node_.param("grid_map/map_sliding_en", mp_.map_sliding_en_, true);
@@ -65,6 +87,7 @@ void GridMap::initMap(ros::NodeHandle &nh)
     traversability_profile_.height_tolerance_up = mp_.resolution_;
   if (traversability_profile_.max_support_height_difference <= 0.0)
     traversability_profile_.max_support_height_difference = std::numeric_limits<double>::infinity();
+
   rebuildSupportSamples(support_model);
 
   node_.param("grid_map/sensor_type", mp_.sensor_type_, string("lidar"));
@@ -164,6 +187,9 @@ void GridMap::initMap(ros::NodeHandle &nh)
 
   sliding_map_frame_sub_ =
       node_.subscribe<nav_msgs::Odometry>("/grid_map/body_pose", 50, &GridMap::slidingMapFrameCallback, this);
+  if (pct_traversability_.enabled)
+    pct_terrain_map_sub_ = node_.subscribe<pct_planner::PctTerrainMap>(
+        pct_traversability_.topic, 1, &GridMap::pctTerrainMapCallback, this);
 
   occ_timer_ = node_.createTimer(ros::Duration(0.05), &GridMap::updateOccupancyCallback, this);
   vis_timer_ = node_.createTimer(ros::Duration(0.05), &GridMap::visCallback, this);
@@ -266,6 +292,37 @@ void GridMap::setTraversabilityProfile(const TraversabilityProfile& profile)
   traversability_profile_ = profile;
   if (traversability_profile_.support_samples.empty())
     rebuildSupportSamples("double_cylinder");
+}
+
+Eigen::Vector3d GridMap::footprintSamplePosition(const Eigen::Vector3d& pos, double yaw,
+                                                  const Eigen::Vector2d& sample) const
+{
+  const double cos_yaw = std::cos(yaw);
+  const double sin_yaw = std::sin(yaw);
+  Eigen::Vector3d result = pos;
+  result(0) += cos_yaw * sample(0) - sin_yaw * sample(1);
+  result(1) += sin_yaw * sample(0) + cos_yaw * sample(1);
+  return result;
+}
+
+void GridMap::pctTerrainMapCallback(const pct_planner::PctTerrainMapConstPtr& msg)
+{
+  std::shared_ptr<PctTerrainMap> map(new PctTerrainMap);
+  std::string error;
+  if (!map->setFromMessage(*msg, error))
+  {
+    ROS_ERROR("[GridMap] Reject PCT terrain map: %s", error.c_str());
+    return;
+  }
+  if (!mp_.frame_id_.empty() && map->frameId() != mp_.frame_id_)
+  {
+    ROS_ERROR("[GridMap] Reject PCT terrain map frame '%s'; grid map frame is '%s'.",
+              map->frameId().c_str(), mp_.frame_id_.c_str());
+    return;
+  }
+  std::atomic_store(&pct_terrain_map_, map);
+  ROS_INFO("[GridMap] Cached PCT terrain map: %s, %u layers x %u rows x %u cols.",
+           map->frameId().c_str(), msg->layers, msg->rows, msg->cols);
 }
 
 void GridMap::markSupportColumnDirty(const Eigen::Vector3i& id)
@@ -375,17 +432,13 @@ bool GridMap::isFootprintSupported(Eigen::Vector3d pos, double yaw)
   if (traversability_profile_.support_samples.empty())
     return false;
 
-  const double cos_yaw = std::cos(yaw);
-  const double sin_yaw = std::sin(yaw);
   const double expected_ground_z = pos(2) - traversability_profile_.body_height;
   double lowest_ground_z = std::numeric_limits<double>::infinity();
   double highest_ground_z = -std::numeric_limits<double>::infinity();
 
   for (const Eigen::Vector2d& sample : traversability_profile_.support_samples)
   {
-    Eigen::Vector3d support_pos = pos;
-    support_pos(0) += cos_yaw * sample(0) - sin_yaw * sample(1);
-    support_pos(1) += sin_yaw * sample(0) + cos_yaw * sample(1);
+    const Eigen::Vector3d support_pos = footprintSamplePosition(pos, yaw, sample);
     if (!isInMap(support_pos))
       return false;
 
@@ -403,12 +456,137 @@ bool GridMap::isFootprintSupported(Eigen::Vector3d pos, double yaw)
   return highest_ground_z - lowest_ground_z <= traversability_profile_.max_support_height_difference;
 }
 
-int GridMap::getTraversabilityOccupancy(Eigen::Vector3d pos, double yaw)
+bool GridMap::projectPctBodyHeight(const Eigen::Vector3d& reference_pos,
+                                   double& projected_body_z,
+                                   PctTerrainMap::QueryStatus* status) const
+{
+  if (!pct_traversability_.enabled)
+  {
+    if (status)
+      *status = PctTerrainMap::QueryStatus::kInvalidMap;
+    return false;
+  }
+
+  const std::shared_ptr<PctTerrainMap> map = std::atomic_load(&pct_terrain_map_);
+  if (!map || !map->valid())
+  {
+    if (status)
+      *status = PctTerrainMap::QueryStatus::kInvalidMap;
+    return false;
+  }
+
+  PctTerrainMap::Cell cell;
+  const double expected_ground_z = reference_pos.z() - traversability_profile_.body_height;
+  const PctTerrainMap::QueryStatus query_status = map->queryTraversableLayer(
+      reference_pos.x(), reference_pos.y(), expected_ground_z,
+      std::numeric_limits<double>::infinity(), pct_traversability_.cost_threshold, cell);
+  if (status)
+    *status = query_status;
+  if (query_status != PctTerrainMap::QueryStatus::kFree)
+    return false;
+
+  projected_body_z = static_cast<double>(cell.ground_z) + traversability_profile_.body_height;
+  return std::isfinite(projected_body_z);
+}
+
+bool GridMap::isPctPointTraversable(Eigen::Vector3d pos,
+                                    PctTerrainMap::QueryStatus* query_status)
+{
+  if (!pct_traversability_.enabled)
+  {
+    if (query_status)
+      *query_status = PctTerrainMap::QueryStatus::kFree;
+    return true;
+  }
+
+  const std::shared_ptr<PctTerrainMap> map = std::atomic_load(&pct_terrain_map_);
+  if (!map || !map->valid())
+  {
+    if (query_status)
+      *query_status = PctTerrainMap::QueryStatus::kInvalidMap;
+    if (pct_traversability_.debug_rejection_stats)
+      ROS_DEBUG_THROTTLE(1.0, "[GridMap] PCT rejection: map unavailable");
+    return !pct_traversability_.unknown_as_obstacle;
+  }
+  const double expected_ground_z = pos(2) - traversability_profile_.body_height;
+  PctTerrainMap::Cell cell;
+  const PctTerrainMap::QueryStatus status = map->queryTraversableLayer(
+      pos.x(), pos.y(), expected_ground_z,
+      pct_traversability_.max_height_error, pct_traversability_.cost_threshold, cell);
+  if (query_status)
+    *query_status = status;
+  if (status != PctTerrainMap::QueryStatus::kFree)
+  {
+    if (pct_traversability_.debug_rejection_stats)
+      ROS_DEBUG_THROTTLE(1.0, "[GridMap] PCT rejection: %s",
+                         PctTerrainMap::queryStatusName(status));
+    const bool unknown = status == PctTerrainMap::QueryStatus::kInvalidMap ||
+                         status == PctTerrainMap::QueryStatus::kOutOfMap ||
+                         status == PctTerrainMap::QueryStatus::kNoElevation;
+    return unknown && !pct_traversability_.unknown_as_obstacle;
+  }
+  return true;
+}
+
+int GridMap::getTraversabilityOccupancy(Eigen::Vector3d pos, double yaw,
+                                        PlanningOccupancyReason* reason)
 {
   const int collision = getInflateOccupancy(pos, yaw);
   if (collision != 0)
+  {
+    if (reason)
+      *reason = PlanningOccupancyReason::kInflatedObstacle;
     return collision;
-  return isFootprintSupported(pos, yaw) ? 0 : 1;
+  }
+
+  PctTerrainMap::QueryStatus pct_status = PctTerrainMap::QueryStatus::kFree;
+  if (!isPctPointTraversable(pos, &pct_status))
+  {
+    if (reason)
+    {
+      switch (pct_status)
+      {
+        case PctTerrainMap::QueryStatus::kInvalidMap:
+          *reason = PlanningOccupancyReason::kPctInvalidMap; break;
+        case PctTerrainMap::QueryStatus::kOutOfMap:
+          *reason = PlanningOccupancyReason::kPctOutOfMap; break;
+        case PctTerrainMap::QueryStatus::kNoElevation:
+          *reason = PlanningOccupancyReason::kPctNoElevation; break;
+        case PctTerrainMap::QueryStatus::kCostTooHigh:
+          *reason = PlanningOccupancyReason::kPctCostTooHigh; break;
+        case PctTerrainMap::QueryStatus::kHeightMismatch:
+          *reason = PlanningOccupancyReason::kPctHeightMismatch; break;
+        case PctTerrainMap::QueryStatus::kFree:
+          *reason = PlanningOccupancyReason::kFree; break;
+      }
+    }
+    return 1;
+  }
+  if (!isFootprintSupported(pos, yaw))
+  {
+    if (reason)
+      *reason = PlanningOccupancyReason::kUnsupportedFootprint;
+    return 1;
+  }
+  if (reason)
+    *reason = PlanningOccupancyReason::kFree;
+  return 0;
+}
+
+int GridMap::getPlanningOccupancy(Eigen::Vector3d pos, double yaw,
+                                  PlanningOccupancyReason* reason)
+{
+  // Do not alter modes which do not opt into PCT terrain checking.  In
+  // particular, the historical SCAN-support-only mode continues to use its
+  // existing A* behaviour and does not change B-spline/FSM collision logic.
+  if (pct_traversability_.enabled)
+    return getTraversabilityOccupancy(pos, yaw, reason);
+
+  const int collision = getInflateOccupancy(pos, yaw);
+  if (reason)
+    *reason = collision == 0 ? PlanningOccupancyReason::kFree
+                            : PlanningOccupancyReason::kInflatedObstacle;
+  return collision;
 }
 
 void GridMap::resetAllMapData()

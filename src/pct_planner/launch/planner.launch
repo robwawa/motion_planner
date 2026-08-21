@@ -1,16 +1,17 @@
 <launch>
-  <arg name="scene" default="Building" doc="Spiral, Building, or Plaza" />
   <arg name="wait_timeout" default="300.0" />
   <!-- Name of rsc/tomogram/<tomogram_name>.pickle.  Keep it explicit so the
        global planner cannot silently use a tomogram from a different PCD. -->
-  <arg name="tomogram_name" default="$(eval {'Spiral': 'spiral0.3_2', 'Building': 'building2_9', 'Plaza': 'plaza3_10'}[arg('scene')])" />
+  <arg name="tomogram_name" default="building2_9" />
   <arg name="optimize_path" default="true" doc="Publish optimized trajectory when true; raw A* path when false" />
   <arg name="endpoint_snap_radius" default="1.5" doc="Maximum XY search radius (m) when projecting endpoints to traversable cells" />
 
+  <rosparam command="load" file="$(find pct_planner)/config/pct_profile.yaml"
+            ns="/pct" />
+
   <node pkg="pct_planner" type="pct_planner_node.py"
         name="pct_planner" output="screen"
-        args="--scene $(arg scene) --tomogram-name $(arg tomogram_name)">
-    <param name="scene" value="$(arg scene)" />
+        args="--tomogram-name $(arg tomogram_name)">
     <param name="navigation_frame" value="map" />
     <param name="body_height" value="0.4" />
     <param name="layer_height_tolerance" value="0.75" />

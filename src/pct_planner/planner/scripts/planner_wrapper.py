@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 
 from utils import *
+from pct_terrain_layout import pos2idx as terrain_pos2idx, select_layer as terrain_select_layer
 
 sys.path.append('../')
 from lib import a_star, ele_planner, traj_opt
@@ -84,7 +85,7 @@ class TomogramPlanner(object):
             max_heading_rate=self.max_heading_rate, use_quintic=self.use_quintic
         )
         self.planner.init_map(
-            20, 15, self.resolution, self.n_slice, 0.2,
+            self.traversable_cost_threshold, 15, self.resolution, self.n_slice, 0.2,
             trav.reshape(-1, trav.shape[-1]).astype(np.double),
             elev_g.reshape(-1, elev_g.shape[-1]).astype(np.double),
             elev_c.reshape(-1, elev_c.shape[-1]).astype(np.double),
@@ -159,23 +160,9 @@ class TomogramPlanner(object):
 
     def select_layer(self, pos, desired_ground_height, max_height_error):
         """Select the traversable surface at XY closest to a requested ground height."""
-        idx = self.pos2idx(np.asarray(pos, dtype=np.float64))
-        row, col = int(idx[1]), int(idx[0])
-        if row < 0 or col < 0 or row >= self.map_dim[0] or col >= self.map_dim[1]:
-            raise ValueError('Pose is outside tomogram bounds')
-
-        candidates = []
-        for layer in range(self.n_slice):
-            cost = self.trav[layer, row, col]
-            height = self.elev_g[layer, row, col]
-            if np.isfinite(height) and cost <= self.traversable_cost_threshold:
-                candidates.append((abs(float(height) - desired_ground_height), layer, float(height)))
-        if not candidates:
-            return None
-        error, layer, height = min(candidates)
-        if error > max_height_error:
-            return None
-        return layer, height
+        return terrain_select_layer(
+            self.trav, self.elev_g, pos, self.center, self.resolution,
+            desired_ground_height, max_height_error, self.traversable_cost_threshold)
 
     def snap_to_traversable(self, pos, reference_height=0.0, radius_cells=3):
         """Project a base pose onto the nearest traversable tomogram cell.
@@ -229,7 +216,4 @@ class TomogramPlanner(object):
                 0 <= int(index[2]) < self.map_dim[0])
     
     def pos2idx(self, pos):
-        pos = pos - self.center
-        idx = np.round(pos / self.resolution).astype(np.int32) + self.offset
-        idx = np.array([idx[1], idx[0]], dtype=np.float32)
-        return idx
+        return terrain_pos2idx(pos, self.center, self.resolution, self.map_dim)

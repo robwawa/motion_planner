@@ -498,40 +498,6 @@ namespace scan_planner
            reference_path_mode_ == "polyline_rolling_window";
   }
 
-  double SCANReplanFSM::projectReferencePathProgress(const Eigen::Vector3d &point) const
-  {
-    if (reference_path_z_profile_.size() < 2)
-      return 0.0;
-
-    double best_distance_sq = std::numeric_limits<double>::infinity();
-    double best_progress = reference_path_z_progress_;
-    double accumulated = 0.0;
-    const Eigen::Vector2d query = point.head<2>();
-    for (size_t i = 1; i < reference_path_z_profile_.size(); ++i)
-    {
-      const Eigen::Vector2d begin = reference_path_z_profile_[i - 1].head<2>();
-      const Eigen::Vector2d segment = reference_path_z_profile_[i].head<2>() - begin;
-      const double segment_length = segment.norm();
-      if (segment_length <= 1e-6)
-        continue;
-
-      const double ratio = std::max(0.0, std::min(1.0,
-          (query - begin).dot(segment) / segment.squaredNorm()));
-      const double progress = accumulated + ratio * segment_length;
-      if (progress + 1e-6 >= reference_path_z_progress_)
-      {
-        const double distance_sq = (query - (begin + ratio * segment)).squaredNorm();
-        if (distance_sq < best_distance_sq)
-        {
-          best_distance_sq = distance_sq;
-          best_progress = progress;
-        }
-      }
-      accumulated += segment_length;
-    }
-    return best_progress;
-  }
-
   bool SCANReplanFSM::adjustGlobalTargetIfOccupied()
   {
     auto map = planner_manager_->grid_map_;
@@ -623,12 +589,6 @@ namespace scan_planner
       waypoints.front() = odom_pos_;
     else
       waypoints.insert(waypoints.begin(), odom_pos_);
-
-    // Keep an immutable, already height-normalized PCT profile for local
-    // B-spline initialization. The global trajectory can contain prior local
-    // replacements, so it is not an appropriate source for terrain height.
-    reference_path_z_profile_ = waypoints;
-    reference_path_z_progress_ = 0.0;
 
     ROS_INFO("[pathCallback] Reference path reduced from %zu poses to %zu trajectory waypoints.",
              msg->poses.size(), waypoints.size());
@@ -1147,20 +1107,11 @@ namespace scan_planner
 
     getLocalTarget();
 
-    const bool use_reference_z = navi_mode_ == NAVI_MODE::REFERENCE_PATH &&
-                                 reference_path_z_profile_.size() >= 2;
-    const double reference_start_progress = use_reference_z ?
-        projectReferencePathProgress(start_pt_) : 0.0;
-
     bool plan_success =
         planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_,
                                         (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj,
-                                        use_reference_z ? &reference_path_z_profile_ : nullptr,
-                                        reference_start_progress);
+                                        navi_mode_ == NAVI_MODE::REFERENCE_PATH);
     have_new_target_ = false;
-
-    if (plan_success && use_reference_z)
-      reference_path_z_progress_ = reference_start_progress;
 
     cout << "final_plan_success=" << plan_success << endl;
 

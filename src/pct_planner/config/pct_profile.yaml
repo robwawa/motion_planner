@@ -1,0 +1,17 @@
+# PCT-wide map and traversability profile. These values apply to every input PCD.
+map:
+  resolution: 0.10
+  ground_h: 0.0
+  slice_dh: 0.5
+
+traversability:
+  kernel_size: 7
+  interval_min: 0.50
+  interval_free: 0.65
+  slope_max: 0.40
+  step_max: 0.17
+  standable_ratio: 0.20
+  cost_barrier: 50.0
+  safe_margin: 0.4
+  inflation: 0.2
+  cost_threshold: 20.0

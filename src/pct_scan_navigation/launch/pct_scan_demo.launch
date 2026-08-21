@@ -1,22 +1,20 @@
 <launch>
-  <arg name="scene" default="Building" doc="PCT scene: Spiral, Building, or Plaza" />
-  <!-- Keep SCAN's collision map aligned with the PCT scene.  The argument can
-       still be overridden for custom PCD files, e.g. pcd_map_file:=/tmp/map.pcd. -->
+  <!-- Keep SCAN's collision map aligned with the PCT input PCD.  The argument
+       can be overridden for custom map files, e.g. pcd_map_file:=/tmp/map.pcd. -->
   <arg name="pcd_map_file"
-       default="$(eval find('pct_planner') + '/rsc/pcd/' + {'Spiral': 'spiral0.3_2.pcd', 'Building': 'building2_9.pcd', 'Plaza': 'plaza3_10.pcd'}[arg('scene')])" />
+       default="$(find pct_planner)/rsc/pcd/building2_9.pcd" doc="可用plaza3_10,building2_9" />
   <!-- Must identify the tomogram built from pcd_map_file.  Supply a unique
        name when overriding pcd_map_file, e.g. best2_jetson_run2. -->
   <arg name="tomogram_name"
-       default="$(eval {'Spiral': 'spiral0.3_2', 'Building': 'building2_9', 'Plaza': 'plaza3_10'}[arg('scene')])" />
+       default="building2_9" />
   <arg name="controller_mode" default="open_loop" doc="open_loop for 3D path playback; closed_loop for same-floor Twist control" />
   <arg name="use_gpu" default="false" />
-  <arg name="optimize_path" default="false" doc="PCT optimized path; set false for raw A* path" />
+  <arg name="optimize_path" default="true" doc="PCT optimized path; set false for raw A* path" />
   <arg name="reference_path_mode" default="polyline_rolling_window"
        doc="SCAN reference behavior: min_snap_single_pass or polyline_rolling_window" />
 
   <!-- PCT and SCAN consume the exact same static map coordinate system. -->
   <include file="$(find pct_planner)/launch/planner.launch">
-    <arg name="scene" value="$(arg scene)" />
     <arg name="optimize_path" value="$(arg optimize_path)" />
     <arg name="tomogram_name" value="$(arg tomogram_name)" />
   </include>
@@ -24,7 +22,6 @@
   <!-- Publish the PCT tomogram and visualization layers in the same map frame
        used by the global planner, SCAN and the merged RViz configuration. -->
   <include file="$(find pct_planner)/launch/tomography.launch">
-    <arg name="scene" value="$(arg scene)" />
     <arg name="backend" value="cpu" />
     <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
     <arg name="tomogram_name" value="$(arg tomogram_name)" />

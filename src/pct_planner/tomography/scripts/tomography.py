@@ -10,46 +10,48 @@ import rospy
 from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
+from pct_planner.msg import PctTerrainMap
 
-sys.path.append('../')
+tomography_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, tomography_root)
+sys.path.insert(0, os.path.join(tomography_root, 'config'))
 from config import POINT_FIELDS_XYZI, GRID_POINTS_XYZI
 from config import Config
+from pct_profile import load_public_profile
 
 rsg_root = os.path.dirname(os.path.abspath(__file__)) + '/../..'
 
 
-def create_tomogram(scene_cfg, backend):
+def create_tomogram(profile, backend):
     """Create the requested backend without requiring CuPy for CPU mode."""
     if backend == 'cpu':
         from tomogram_cpu import CpuTomogram
-        return CpuTomogram(scene_cfg), 'cpu'
-
+        return CpuTomogram(profile), 'cpu'
     try:
         import cupy as cp
         cp.cuda.runtime.getDeviceCount()
         from tomogram import Tomogram
-        return Tomogram(scene_cfg), 'cuda'
+        return Tomogram(profile), 'cuda'
     except Exception as error:
         if backend == 'cuda':
             raise RuntimeError('CUDA backend unavailable: {}'.format(error))
         rospy.logwarn('CUDA unavailable; using CPU backend: %s', error)
         from tomogram_cpu import CpuTomogram
-        return CpuTomogram(scene_cfg), 'cpu'
+        return CpuTomogram(profile), 'cpu'
 
 
 class Tomography(object):
-    def __init__(self, cfg, scene_cfg, backend='auto', pcd_file=None,
+    def __init__(self, cfg, profile, backend='auto', pcd_file=None,
                  tomogram_name=None):
         self.export_dir = rsg_root + cfg.map.export_dir
-        self.pcd_file = pcd_file or scene_cfg.pcd.file_name
-        self.tomogram_name = tomogram_name or os.path.splitext(
-            os.path.basename(self.pcd_file))[0]
-        self.resolution = scene_cfg.map.resolution
-        self.ground_h = scene_cfg.map.ground_h
-        self.slice_dh = scene_cfg.map.slice_dh
+        self.pcd_file = pcd_file
+        self.tomogram_name = tomogram_name
+        self.resolution = profile.map.resolution
+        self.ground_h = profile.map.ground_h
+        self.slice_dh = profile.map.slice_dh
 
         self.center = np.zeros(2, dtype=np.float32)
-        self.tomogram, self.backend = create_tomogram(scene_cfg, backend)
+        self.tomogram, self.backend = create_tomogram(profile, backend)
         rospy.loginfo('Tomogram backend: %s', self.backend)
         points = self.loadPCD(self.pcd_file)
 
@@ -74,6 +76,8 @@ class Tomography(object):
 
         tomogram_topic = cfg.ros.tomogram_topic
         self.tomogram_pub = rospy.Publisher(tomogram_topic, PointCloud2, latch=True, queue_size=1)
+        terrain_map_topic = rospy.get_param('~terrain_map_topic', cfg.ros.terrain_map_topic)
+        self.terrain_map_pub = rospy.Publisher(terrain_map_topic, PctTerrainMap, latch=True, queue_size=1)
 
     def loadPCD(self, pcd_file):
         path = pcd_file if os.path.isabs(pcd_file) else os.path.join(
@@ -147,6 +151,7 @@ class Tomography(object):
         self.publishLayers(self.layer_G_pub_list, layers_g, layers_t)
         self.publishLayers(self.layer_C_pub_list, layers_c, None)
         self.publishTomogram(layers_g, layers_t)
+        self.publishTerrainMap(layers_g, layers_t)
 
     def exportTomogram(self, tomogram, map_file):        
         data_dict = {
@@ -223,26 +228,53 @@ class Tomography(object):
         points_msg = pc2.create_cloud(header, POINT_FIELDS_XYZI, global_points)
         self.tomogram_pub.publish(points_msg)
 
+    def publishTerrainMap(self, layers_g, layers_t):
+        """Publish the complete, non-visual PCT cache once for local planners.
+
+        Arrays deliberately preserve NumPy C-order [layer, row, col].  The
+        consumer must not infer the layout from the visual PointCloud2 topic.
+        """
+        header = Header()
+        header.stamp = rospy.Time.now()
+        header.frame_id = self.map_frame
+        msg = PctTerrainMap()
+        msg.header = header
+        msg.resolution = float(self.resolution)
+        msg.center_x = float(self.center[0])
+        msg.center_y = float(self.center[1])
+        msg.layers = int(layers_g.shape[0])
+        msg.rows = int(layers_g.shape[1])
+        msg.cols = int(layers_g.shape[2])
+        msg.traversability = np.ascontiguousarray(layers_t, dtype=np.float32).ravel().tolist()
+        msg.ground_elevation = np.ascontiguousarray(
+            np.nan_to_num(layers_g, nan=0.0), dtype=np.float32).ravel().tolist()
+        msg.elevation_valid = np.ascontiguousarray(
+            np.isfinite(layers_g), dtype=np.uint8).ravel().tolist()
+        self.terrain_map_pub.publish(msg)
+        rospy.loginfo('PCT terrain map published: %d layers, %d x %d cells on %s',
+                      msg.layers, msg.rows, msg.cols, self.terrain_map_pub.resolved_name)
+
 
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--scene', type=str, required=True,
-                        help='Processing parameter scene: Spiral, Building, or Plaza')
     parser.add_argument('--backend', choices=('auto', 'cuda', 'cpu'), default='auto', help='Tomogram backend (default: auto)')
-    parser.add_argument('--pcd-file', default=None,
+    parser.add_argument('--pcd-file', required=True,
                         help='PCD path relative to rsc/pcd or an absolute path')
-    parser.add_argument('--tomogram-name', default=None,
+    parser.add_argument('--tomogram-name', required=True,
                         help='Output basename under rsc/tomogram, without .pickle')
     args = parser.parse_args()
 
     cfg = Config()
-    scene_cfg = getattr(__import__('config'), 'Scene' + args.scene)
 
     rospy.init_node('pointcloud_tomography', anonymous=True)
-
-    mapping = Tomography(cfg, scene_cfg, args.backend, args.pcd_file,
+    profile = load_public_profile()
+    rospy.loginfo('PCT traversability: kernel=%d slope=%.3f step=%.3f barrier=%.3f threshold=%.3f',
+                  profile.trav.kernel_size, profile.trav.slope_max,
+                  profile.trav.step_max, profile.trav.cost_barrier,
+                  profile.trav.cost_threshold)
+    mapping = Tomography(cfg, profile, args.backend, args.pcd_file,
                           args.tomogram_name)
 
     rospy.spin()

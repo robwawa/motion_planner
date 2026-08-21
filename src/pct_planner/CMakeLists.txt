@@ -17,6 +17,11 @@ add_action_files(
   PlanPath3D.action
 )
 
+add_message_files(
+  FILES
+  PctTerrainMap.msg
+)
+
 generate_messages(
   DEPENDENCIES
   actionlib_msgs
@@ -33,7 +38,7 @@ catkin_install_python(PROGRAMS
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY launch rsc
+install(DIRECTORY launch rsc config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 install(DIRECTORY tomography/config

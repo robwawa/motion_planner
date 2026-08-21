@@ -88,7 +88,8 @@ ROS 包提供 `package.xml`、安装规则和可复用的 launch 文件；规划
 
 ```bash
 cd tomography/scripts/
-python3 tomography.py --scene Building --backend auto
+python3 tomography.py --backend auto \
+  --pcd-file building2_9.pcd --tomogram-name building2_9
 ```
 
 `--backend auto` 会在检测到 CuPy 和 CUDA 设备时使用 CUDA，否则自动回退到 CPU。也可以显式指定：
@@ -107,7 +108,7 @@ CPU 后端与 CUDA 后端生成相同布局的 tomogram pickle 文件，但处�
 ```bash
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/你的路径/PCT_planner/planner/lib/3rdparty/gtsam-4.1.1/install/lib"
 cd planner/scripts/
-python3 plan.py --scene Building
+python3 plan.py --tomogram-name building2_9
 ```
 
 规划生成的轨迹会以 ROS `Path` 消息发布到 RViz。
@@ -117,25 +118,26 @@ python3 plan.py --scene Building
 启动层析节点：
 
 ```bash
-roslaunch pct_planner tomography.launch scene:=Building backend:=cpu
+roslaunch pct_planner tomography.launch backend:=cpu
 ```
 
 启动规划节点：
 
 ```bash
-roslaunch pct_planner planner.launch scene:=Building
+roslaunch pct_planner planner.launch
 ```
 
-也可以一键启动层析、规划和可选 RViz。规划节点会自动等待对应场景的 tomogram 文件生成：
+也可以一键启动层析、规划和可选 RViz。规划节点会自动等待对应 tomogram 文件生成：
 
 ```bash
 roslaunch pct_planner pct_planner.launch \
-  scene:=Building backend:=cpu launch_rviz:=true
+  backend:=cpu launch_rviz:=true
 ```
 
 可用参数：
 
-- `scene`：`Spiral`、`Building` 或 `Plaza`。
+- `pcd_map_file`：输入 PCD 文件，可为绝对路径或相对 `rsc/pcd/` 的路径；默认 Building PCD。
+- `tomogram_name`：输出/读取的 tomogram 文件名（不带 `.pickle`）；默认 `building2_9`。
 - `backend`：`auto`、`cpu` 或 `cuda`。
 - `launch_rviz`：是否同时启动 RViz，默认 `false`。
 - `wait_timeout`：规划节点等待 tomogram 的最长时间，默认 300 秒。

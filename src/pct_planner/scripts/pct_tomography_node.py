@@ -21,8 +21,10 @@ def main():
     package_root = package_path()
     script_dir = os.path.join(package_root, 'tomography', 'scripts')
     config_dir = os.path.join(package_root, 'tomography')
+    traversability_config_dir = os.path.join(config_dir, 'config')
     sys.path.insert(0, script_dir)
     sys.path.insert(0, config_dir)
+    sys.path.insert(0, traversability_config_dir)
     script_path = os.path.join(script_dir, 'tomography.py')
     # roslaunch appends private remapping arguments such as __name:=... and
     # __log:=....  They are meaningful to rospy but not to argparse.
