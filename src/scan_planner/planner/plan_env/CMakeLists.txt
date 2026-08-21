@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   message_filters
   tf
+  pct_planner
 )
 
 find_package(Eigen3 REQUIRED)
@@ -25,7 +26,7 @@ find_package(PCL 1.7 REQUIRED)
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES plan_env
- CATKIN_DEPENDS roscpp std_msgs tf
+ CATKIN_DEPENDS roscpp std_msgs tf pct_planner
 #  DEPENDS system_lib
 )
 
@@ -42,9 +43,11 @@ link_directories(${PCL_LIBRARY_DIRS})
 
 add_library( plan_env 
     src/grid_map.cpp 
+    src/pct_terrain_map.cpp
     src/raycast.cpp
     )
 target_link_libraries( plan_env
     ${catkin_LIBRARIES} 
     ${PCL_LIBRARIES}
     )  
+add_dependencies(plan_env ${catkin_EXPORTED_TARGETS} ${pct_planner_EXPORTED_TARGETS})

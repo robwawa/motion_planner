@@ -5,6 +5,7 @@ class ConfigROS():
     layer_G_topic = "/layer_G_"
     layer_C_topic = "/layer_C_"
     tomogram_topic = "/tomogram"
+    terrain_map_topic = "/pct/terrain_map"
 
 
 class ConfigMap():

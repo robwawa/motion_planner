@@ -1,19 +1,21 @@
 <launch>
-  <arg name="scene" default="Building" doc="Spiral, Building, or Plaza" />
   <arg name="backend" default="auto" doc="auto, cpu, or cuda" />
+  <arg name="pcd_map_file" default="$(find pct_planner)/rsc/pcd/building2_9.pcd" />
+  <arg name="tomogram_name" default="building2_9" />
   <arg name="wait_timeout" default="300.0" />
   <arg name="launch_rviz" default="true" />
   <arg name="optimize_path" default="true" />
 
   <include file="$(find pct_planner)/launch/tomography.launch">
-    <arg name="scene" value="$(arg scene)" />
     <arg name="backend" value="$(arg backend)" />
+    <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
+    <arg name="tomogram_name" value="$(arg tomogram_name)" />
   </include>
 
   <include file="$(find pct_planner)/launch/planner.launch">
-    <arg name="scene" value="$(arg scene)" />
     <arg name="wait_timeout" value="$(arg wait_timeout)" />
     <arg name="optimize_path" value="$(arg optimize_path)" />
+    <arg name="tomogram_name" value="$(arg tomogram_name)" />
   </include>
 
   <node if="$(arg launch_rviz)" pkg="rviz" type="rviz"

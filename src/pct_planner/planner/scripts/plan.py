@@ -12,23 +12,18 @@ sys.path.append('../')
 from config import Config
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--scene', type=str, default='Spiral', help='Name of the scene. Available: [\'Spiral\', \'Building\', \'Plaza\']')
+parser.add_argument('--tomogram-name', default='building2_9',
+                    help='Tomogram basename under rsc/tomogram, without .pickle')
+parser.add_argument('--start', nargs=2, type=float, default=(5.0, 5.0),
+                    metavar=('X', 'Y'))
+parser.add_argument('--goal', nargs=2, type=float, default=(-6.0, -1.0),
+                    metavar=('X', 'Y'))
 args = parser.parse_args()
 
 cfg = Config()
-
-if args.scene == 'Spiral':
-    tomo_file = 'spiral0.3_2'
-    start_pos = np.array([-16.0, -6.0], dtype=np.float32)
-    end_pos = np.array([-26.0, -5.0], dtype=np.float32)
-elif args.scene == 'Building':
-    tomo_file = 'building2_9'
-    start_pos = np.array([5.0, 5.0], dtype=np.float32)
-    end_pos = np.array([-6.0, -1.0], dtype=np.float32)
-else:
-    tomo_file = 'plaza3_10'
-    start_pos = np.array([0.0, 0.0], dtype=np.float32)
-    end_pos = np.array([23.0, 10.0], dtype=np.float32)
+tomo_file = args.tomogram_name
+start_pos = np.asarray(args.start, dtype=np.float32)
+end_pos = np.asarray(args.goal, dtype=np.float32)
 
 path_pub = rospy.Publisher("/pct_path", Path, latch=True, queue_size=1)
 planner = TomogramPlanner(cfg)

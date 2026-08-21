@@ -79,8 +79,8 @@ namespace scan_planner
       {
         Eigen::Vector3d sample_pt = a * init_points.col(i - 1) + (1 - a) * init_points.col(i);
         double sample_yaw = estimateSegmentYaw(init_points.col(i - 1), init_points.col(i));
-        // 仅以实体碰撞划分绕障段；支撑约束在后续 A* 候选节点中生效。
-        occ = grid_map_->getInflateOccupancy(sample_pt, sample_yaw);
+        // Use the same combined collision/traversability predicate as A*.
+        occ = grid_map_->getPlanningOccupancy(sample_pt, sample_yaw);
         // cout << setprecision(5);
         // cout << (a * init_points.col(i-1) + (1-a) * init_points.col(i)).transpose() << " occ1=" << occ << endl;
 
@@ -276,7 +276,7 @@ namespace scan_planner
             {
               Eigen::Vector3d sample_pt = (a / length) * intersection_point + (1 - a / length) * cps_.points.col(j);
               double sample_yaw = estimateControlPointYaw(cps_.points, j);
-              occ = grid_map_->getInflateOccupancy(sample_pt, sample_yaw);
+              occ = grid_map_->getPlanningOccupancy(sample_pt, sample_yaw);
 
               if (occ || a < grid_map_->getResolution())
               {
@@ -723,7 +723,7 @@ namespace scan_planner
     for (int i = order_ - 1; i <= i_end; ++i)
     {
 
-      bool occ = grid_map_->getInflateOccupancy(cps_.points.col(i), estimateControlPointYaw(cps_.points, i));
+      bool occ = grid_map_->getPlanningOccupancy(cps_.points.col(i), estimateControlPointYaw(cps_.points, i));
 
       /*** check if the new collision will be valid ***/
       if (occ)
@@ -746,7 +746,7 @@ namespace scan_planner
         int j;
         for (j = i - 1; j >= 0; --j)
         {
-          occ = grid_map_->getInflateOccupancy(cps_.points.col(j), estimateControlPointYaw(cps_.points, j));
+          occ = grid_map_->getPlanningOccupancy(cps_.points.col(j), estimateControlPointYaw(cps_.points, j));
           if (!occ)
           {
             in_id = j;
@@ -761,7 +761,7 @@ namespace scan_planner
 
         for (j = i + 1; j < cps_.size; ++j)
         {
-          occ = grid_map_->getInflateOccupancy(cps_.points.col(j), estimateControlPointYaw(cps_.points, j));
+          occ = grid_map_->getPlanningOccupancy(cps_.points.col(j), estimateControlPointYaw(cps_.points, j));
 
           if (!occ)
           {
@@ -881,7 +881,7 @@ namespace scan_planner
               {
                 Eigen::Vector3d sample_pt = (a / length) * intersection_point + (1 - a / length) * cps_.points.col(j);
                 double sample_yaw = estimateControlPointYaw(cps_.points, j);
-                bool occ = grid_map_->getInflateOccupancy(sample_pt, sample_yaw);
+                bool occ = grid_map_->getPlanningOccupancy(sample_pt, sample_yaw);
 
                 if (occ || a < grid_map_->getResolution())
                 {
@@ -1008,7 +1008,7 @@ namespace scan_planner
         {
           Eigen::Vector3d pos = traj.evaluateDeBoorT(t);
           Eigen::Vector3d pos_next = traj.evaluateDeBoorT(std::min(t + t_step, tmp));
-          flag_occ = grid_map_->getInflateOccupancy(pos, estimateSegmentYaw(pos, pos_next));
+          flag_occ = grid_map_->getPlanningOccupancy(pos, estimateSegmentYaw(pos, pos_next));
           if (flag_occ)
           {
             //cout << "hit_obs, t=" << t << " P=" << traj.evaluateDeBoorT(t).transpose() << endl;
@@ -1103,7 +1103,7 @@ namespace scan_planner
       {
         Eigen::Vector3d pos = traj.evaluateDeBoorT(t);
         Eigen::Vector3d pos_next = traj.evaluateDeBoorT(std::min(t + t_step, tmp));
-        if (grid_map_->getInflateOccupancy(pos, estimateSegmentYaw(pos, pos_next)))
+        if (grid_map_->getPlanningOccupancy(pos, estimateSegmentYaw(pos, pos_next)))
         {
           // cout << "Refined traj hit_obs, t=" << t << " P=" << traj.evaluateDeBoorT(t).transpose() << endl;
 

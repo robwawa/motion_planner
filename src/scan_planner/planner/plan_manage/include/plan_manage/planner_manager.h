@@ -8,6 +8,7 @@
 #include <scan_planner/DataDisp.h>
 #include <plan_env/grid_map.h>
 #include <plan_manage/plan_container.hpp>
+#include <plan_manage/reference_path_z.h>
 #include <ros/ros.h>
 #include <traj_utils/planning_visualization.h>
 
@@ -29,8 +30,9 @@ namespace scan_planner
     /* main planning interface */
     bool reboundReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel, Eigen::Vector3d start_acc,
                        Eigen::Vector3d end_pt, Eigen::Vector3d end_vel, bool flag_polyInit, bool flag_randomPolyTraj,
-                       const std::vector<Eigen::Vector3d> *z_reference_path = nullptr,
-                       double z_reference_start_progress = 0.0);
+                       const ReferencePathZProfile *z_reference_profile = nullptr,
+                       double z_reference_start_progress = 0.0,
+                       double z_reference_target_progress = 0.0);
     bool EmergencyStop(Eigen::Vector3d stop_pos);
     bool planGlobalTraj(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                         const Eigen::Vector3d &end_pos, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);

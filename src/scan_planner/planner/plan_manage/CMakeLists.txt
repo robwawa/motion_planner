@@ -60,6 +60,7 @@ add_executable(scan_planner_node
   src/scan_planner_node.cpp 
   src/scan_replan_fsm.cpp
   src/planner_manager.cpp
+  src/reference_path_z.cpp
   )
 target_link_libraries(scan_planner_node 
   ${catkin_LIBRARIES}
@@ -79,3 +80,12 @@ target_link_libraries(go2_kinematic_sim ${catkin_LIBRARIES})
 
 add_executable(go2_gait_publisher src/go2_gait_publisher.cpp)
 target_link_libraries(go2_gait_publisher ${catkin_LIBRARIES})
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(reference_path_z_test
+    test/reference_path_z_test.cpp
+    src/reference_path_z.cpp)
+  if(TARGET reference_path_z_test)
+    target_link_libraries(reference_path_z_test ${catkin_LIBRARIES})
+  endif()
+endif()

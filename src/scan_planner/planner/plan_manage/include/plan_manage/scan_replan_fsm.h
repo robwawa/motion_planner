@@ -19,6 +19,7 @@
 #include <scan_planner/Bspline.h>
 #include <scan_planner/DataDisp.h>
 #include <plan_manage/planner_manager.h>
+#include <plan_manage/reference_path_z.h>
 #include <traj_utils/planning_visualization.h>
 
 using std::vector;
@@ -96,7 +97,7 @@ namespace scan_planner
     bool have_final_yaw_{false};
     Eigen::Vector3d local_target_pt_, local_target_vel_;                     // local target state
     std::vector<Eigen::Vector3d> active_waypoints_;
-    std::vector<Eigen::Vector3d> reference_path_z_profile_;
+    ReferencePathZProfile reference_path_z_profile_;
     double reference_path_z_progress_{0.0};
     int current_wp_;
 
@@ -124,7 +125,9 @@ namespace scan_planner
     bool planNextWaypoint();
     bool isWaypointSequenceMode() const;
     bool usePolylineRollingWindow() const;
-    double projectReferencePathProgress(const Eigen::Vector3d &point) const;
+    double projectReferencePathProgress(const Eigen::Vector3d &point,
+                                        double min_progress,
+                                        double max_progress) const;
     bool adjustGlobalTargetIfOccupied();
     void getLocalTarget();
     void finishProcess();

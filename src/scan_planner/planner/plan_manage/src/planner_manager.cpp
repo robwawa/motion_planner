@@ -70,45 +70,19 @@ namespace scan_planner
     }
 
     void applyReferencePathZ(std::vector<Eigen::Vector3d> &points,
-                             const std::vector<Eigen::Vector3d> &reference_path,
+                             const ReferencePathZProfile &reference_profile,
                              const double start_progress,
+                             const double target_progress,
                              const double start_z,
                              const double target_z)
     {
-      if (points.empty() || reference_path.size() < 2)
+      if (points.empty() || !reference_profile.valid())
       {
         applyLinearZReference(points, start_z, target_z);
         return;
       }
-
-      std::vector<double> reference_progress(reference_path.size(), 0.0);
-      for (size_t i = 1; i < reference_path.size(); ++i)
-        reference_progress[i] = reference_progress[i - 1] +
-                                (reference_path[i].head<2>() - reference_path[i - 1].head<2>()).norm();
-
-      const auto sample_z = [&](const double progress) {
-        const double clamped = std::max(0.0, std::min(progress, reference_progress.back()));
-        for (size_t i = 1; i < reference_progress.size(); ++i)
-        {
-          if (clamped <= reference_progress[i])
-          {
-            const double segment_length = reference_progress[i] - reference_progress[i - 1];
-            const double ratio = segment_length > 1e-6 ?
-                (clamped - reference_progress[i - 1]) / segment_length : 0.0;
-            return reference_path[i - 1](2) + ratio * (reference_path[i](2) - reference_path[i - 1](2));
-          }
-        }
-        return reference_path.back()(2);
-      };
-
-      double local_progress = 0.0;
-      points.front()(2) = start_z;
-      for (size_t i = 1; i < points.size(); ++i)
-      {
-        local_progress += (points[i].head<2>() - points[i - 1].head<2>()).norm();
-        points[i](2) = sample_z(start_progress + local_progress);
-      }
-      points.back()(2) = target_z;
+      reference_profile.applyToInitialPath(points, start_progress, target_progress,
+                                           start_z, target_z);
     }
   } // namespace
 
@@ -151,8 +125,9 @@ namespace scan_planner
   bool SCANPlannerManager::reboundReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
                                         Eigen::Vector3d start_acc, Eigen::Vector3d local_target_pt,
                                         Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj,
-                                        const std::vector<Eigen::Vector3d> *z_reference_path,
-                                        double z_reference_start_progress)
+                                        const ReferencePathZProfile *z_reference_profile,
+                                        double z_reference_start_progress,
+                                        double z_reference_target_progress)
   {
 
     static int count = 0;
@@ -319,8 +294,9 @@ namespace scan_planner
       }
     } while (flag_regenerate);
 
-    if (z_reference_path != nullptr && z_reference_path->size() >= 2)
-      applyReferencePathZ(point_set, *z_reference_path, z_reference_start_progress,
+    if (z_reference_profile != nullptr && z_reference_profile->valid())
+      applyReferencePathZ(point_set, *z_reference_profile, z_reference_start_progress,
+                          z_reference_target_progress,
                           start_pt(2), local_target_pt(2));
     else
       applyLinearZReference(point_set, start_pt(2), local_target_pt(2));

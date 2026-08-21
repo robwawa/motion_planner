@@ -498,38 +498,13 @@ namespace scan_planner
            reference_path_mode_ == "polyline_rolling_window";
   }
 
-  double SCANReplanFSM::projectReferencePathProgress(const Eigen::Vector3d &point) const
+  double SCANReplanFSM::projectReferencePathProgress(const Eigen::Vector3d &point,
+                                                      const double min_progress,
+                                                      const double max_progress) const
   {
-    if (reference_path_z_profile_.size() < 2)
+    if (!reference_path_z_profile_.valid())
       return 0.0;
-
-    double best_distance_sq = std::numeric_limits<double>::infinity();
-    double best_progress = reference_path_z_progress_;
-    double accumulated = 0.0;
-    const Eigen::Vector2d query = point.head<2>();
-    for (size_t i = 1; i < reference_path_z_profile_.size(); ++i)
-    {
-      const Eigen::Vector2d begin = reference_path_z_profile_[i - 1].head<2>();
-      const Eigen::Vector2d segment = reference_path_z_profile_[i].head<2>() - begin;
-      const double segment_length = segment.norm();
-      if (segment_length <= 1e-6)
-        continue;
-
-      const double ratio = std::max(0.0, std::min(1.0,
-          (query - begin).dot(segment) / segment.squaredNorm()));
-      const double progress = accumulated + ratio * segment_length;
-      if (progress + 1e-6 >= reference_path_z_progress_)
-      {
-        const double distance_sq = (query - (begin + ratio * segment)).squaredNorm();
-        if (distance_sq < best_distance_sq)
-        {
-          best_distance_sq = distance_sq;
-          best_progress = progress;
-        }
-      }
-      accumulated += segment_length;
-    }
-    return best_progress;
+    return reference_path_z_profile_.projectProgress(point, min_progress, max_progress);
   }
 
   bool SCANReplanFSM::adjustGlobalTargetIfOccupied()
@@ -544,7 +519,7 @@ namespace scan_planner
     const int sample_num = std::max(1, static_cast<int>(std::ceil(duration / sample_dt)));
     const Eigen::Vector3d final_pt = global_data.global_traj_.evaluate(duration);
     const Eigen::Vector3d final_prev = global_data.global_traj_.evaluate(duration * (sample_num - 1) / sample_num);
-    const int final_occ = map->getInflateOccupancy(final_pt, estimateYawFromSegment(final_prev, final_pt));
+    const int final_occ = map->getPlanningOccupancy(final_pt, estimateYawFromSegment(final_prev, final_pt));
     if (final_occ <= 0)
       return true;
 
@@ -555,7 +530,7 @@ namespace scan_planner
       const Eigen::Vector3d pt = global_data.global_traj_.evaluate(t);
       const Eigen::Vector3d prev_pt = global_data.global_traj_.evaluate(prev_t);
 
-      if (map->getInflateOccupancy(pt, estimateYawFromSegment(prev_pt, pt)) == 0)
+      if (map->getPlanningOccupancy(pt, estimateYawFromSegment(prev_pt, pt)) == 0)
       {
         const Eigen::Vector3d raw_end = end_pt_;
         end_pt_ = pt;
@@ -627,7 +602,8 @@ namespace scan_planner
     // Keep an immutable, already height-normalized PCT profile for local
     // B-spline initialization. The global trajectory can contain prior local
     // replacements, so it is not an appropriate source for terrain height.
-    reference_path_z_profile_ = waypoints;
+    if (!reference_path_z_profile_.setPath(waypoints))
+      ROS_WARN("[pathCallback] Reference path has no usable XY progress; use linear Z initialization.");
     reference_path_z_progress_ = 0.0;
 
     ROS_INFO("[pathCallback] Reference path reduced from %zu poses to %zu trajectory waypoints.",
@@ -1116,7 +1092,7 @@ namespace scan_planner
 
       Eigen::Vector3d pos = info->position_traj_.evaluateDeBoorT(t);
       Eigen::Vector3d pos_next = info->position_traj_.evaluateDeBoorT(std::min(t + time_step, info->duration_));
-      if (map->getInflateOccupancy(pos, estimateYawFromSegment(pos, pos_next)))
+      if (map->getPlanningOccupancy(pos, estimateYawFromSegment(pos, pos_next)))
       {
         if (planFromCurrentTraj()) // Make a chance
         {
@@ -1148,15 +1124,19 @@ namespace scan_planner
     getLocalTarget();
 
     const bool use_reference_z = navi_mode_ == NAVI_MODE::REFERENCE_PATH &&
-                                 reference_path_z_profile_.size() >= 2;
+                                 reference_path_z_profile_.valid();
     const double reference_start_progress = use_reference_z ?
-        projectReferencePathProgress(start_pt_) : 0.0;
+        projectReferencePathProgress(start_pt_, reference_path_z_progress_,
+                                     reference_path_z_profile_.totalProgress()) : 0.0;
+    const double reference_target_progress = use_reference_z ?
+        projectReferencePathProgress(local_target_pt_, reference_start_progress,
+                                     reference_path_z_profile_.totalProgress()) : 0.0;
 
     bool plan_success =
         planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_,
                                         (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj,
                                         use_reference_z ? &reference_path_z_profile_ : nullptr,
-                                        reference_start_progress);
+                                        reference_start_progress, reference_target_progress);
     have_new_target_ = false;
 
     if (plan_success && use_reference_z)
@@ -1429,7 +1409,7 @@ namespace scan_planner
         use_adaptive_horizon ? target_t : (target_found ? target_t : duration);
 
     auto targetOccupancy = [&](const Eigen::Vector3d &pt) {
-      return planner_manager_->grid_map_->getInflateOccupancy(pt, estimateYawFromSegment(odom_pos_, pt));
+      return planner_manager_->grid_map_->getPlanningOccupancy(pt, estimateYawFromSegment(odom_pos_, pt));
     };
 
     if (targetOccupancy(local_target_pt_) != 0)

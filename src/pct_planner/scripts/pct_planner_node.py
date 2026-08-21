@@ -50,16 +50,16 @@ def add_planner_paths(package_root):
 
 
 class PCTActionServer:
-    TOMOGRAMS = {'Spiral': 'spiral0.3_2', 'Building': 'building2_9', 'Plaza': 'plaza3_10'}
-
-    def __init__(self, scene, navigation_frame, body_height, layer_tolerance, optimize_path,
-                 endpoint_snap_radius, tomogram_name=None, wait_timeout=300.0):
-        if scene not in self.TOMOGRAMS:
-            raise ValueError('Unknown scene: {}'.format(scene))
+    def __init__(self, navigation_frame, body_height, layer_tolerance, optimize_path,
+                 endpoint_snap_radius, tomogram_name, wait_timeout=300.0):
+        if not tomogram_name:
+            raise ValueError('tomogram_name must be provided')
         package_root = package_path()
         add_planner_paths(package_root)
+        sys.path.insert(0, os.path.join(package_root, 'tomography', 'config'))
         from config import Config
         from planner_wrapper import TomogramPlanner
+        from pct_profile import load_public_profile
 
         self.navigation_frame = navigation_frame
         self.body_height = body_height
@@ -67,7 +67,10 @@ class PCTActionServer:
         self.optimize_path = optimize_path
         self.path_pub = rospy.Publisher('/pct/global_path', Path, latch=True, queue_size=1)
         self.planner = TomogramPlanner(Config())
-        self.tomogram_name = tomogram_name or self.TOMOGRAMS[scene]
+        self.planner.traversable_cost_threshold = load_public_profile().trav.cost_threshold
+        rospy.loginfo('[pct_planner] public traversability cost_threshold=%.3f',
+                      self.planner.traversable_cost_threshold)
+        self.tomogram_name = tomogram_name
         tomogram_path = os.path.join(package_root, 'rsc', 'tomogram',
                                      self.tomogram_name + '.pickle')
         deadline = time.monotonic() + max(0.0, float(wait_timeout))
@@ -82,8 +85,8 @@ class PCTActionServer:
         self.server = actionlib.SimpleActionServer(
             '/pct/plan_path', PlanPath3DAction, execute_cb=self.execute, auto_start=False)
         self.server.start()
-        rospy.loginfo('[pct_planner] ready: scene=%s tomogram=%s frame=%s',
-                      scene, self.tomogram_name, navigation_frame)
+        rospy.loginfo('[pct_planner] ready: tomogram=%s frame=%s',
+                      self.tomogram_name, navigation_frame)
 
     def feedback(self, stage):
         self.server.publish_feedback(PlanPath3DFeedback(stage=stage))
@@ -234,12 +237,10 @@ class PCTActionServer:
 
 def main():
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--scene', default='Building')
-    parser.add_argument('--tomogram-name', default=None)
+    parser.add_argument('--tomogram-name', required=True)
     args, _ = parser.parse_known_args()
     rospy.init_node('pct_planner')
-    scene = rospy.get_param('~scene', args.scene)
-    PCTActionServer(scene, rospy.get_param('~navigation_frame', 'map'),
+    PCTActionServer(rospy.get_param('~navigation_frame', 'map'),
                     rospy.get_param('~body_height', 0.4),
                     rospy.get_param('~layer_height_tolerance', 0.75),
                     rospy.get_param('~optimize_path', True),

@@ -13,6 +13,7 @@
 #include <nav_msgs/Odometry.h>
 #include <queue>
 #include <ros/ros.h>
+#include <memory>
 #include <tuple>
 #include <visualization_msgs/Marker.h>
 
@@ -26,6 +27,7 @@
 #include <message_filters/time_synchronizer.h>
 
 #include <plan_env/raycast.h>
+#include <plan_env/pct_terrain_map.h>
 
 #define logit(x) (log((x) / (1 - (x))))
 
@@ -163,12 +165,31 @@ struct TraversabilityProfile {
   std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> support_samples;
 };
 
+struct PctTraversabilityParameters {
+  bool enabled{false};
+  bool debug_rejection_stats{false};
+  double cost_threshold{20.0};
+  double max_height_error{0.20};
+  std::string topic{"/pct/terrain_map"};
+};
+
 class GridMap {
 public:
   GridMap() {}
   ~GridMap() {}
 
   enum { INVALID_IDX = -10000 };
+
+  enum class PlanningOccupancyReason {
+    kFree,
+    kInflatedObstacle,
+    kPctInvalidMap,
+    kPctOutOfMap,
+    kPctNoElevation,
+    kPctCostTooHigh,
+    kPctHeightMismatch,
+    kUnsupportedFootprint
+  };
 
   // occupancy map management
   void resetBuffer();
@@ -186,8 +207,20 @@ public:
   inline int getOccupancy(Eigen::Vector3d pos);
   inline int getOccupancy(Eigen::Vector3i id);
   inline int getInflateOccupancy(Eigen::Vector3d pos, double yaw);
-  int getTraversabilityOccupancy(Eigen::Vector3d pos, double yaw);
+  int getTraversabilityOccupancy(Eigen::Vector3d pos, double yaw,
+                                 PlanningOccupancyReason* reason = nullptr);
+  // Planning/execution collision interface.  PCT is deliberately folded into
+  // collision handling only in mode 3; the legacy modes keep their original
+  // point-cloud-only semantics.
+  int getPlanningOccupancy(Eigen::Vector3d pos, double yaw,
+                           PlanningOccupancyReason* reason = nullptr);
+  bool pctTraversabilityEnabled() const { return pct_traversability_.enabled; }
+  bool projectPctBodyHeight(const Eigen::Vector3d& reference_pos,
+                            double& projected_body_z,
+                            PctTerrainMap::QueryStatus* status = nullptr) const;
   bool isFootprintSupported(Eigen::Vector3d pos, double yaw);
+  bool isPctPointTraversable(Eigen::Vector3d pos,
+                             PctTerrainMap::QueryStatus* status = nullptr);
   void setTraversabilityProfile(const TraversabilityProfile& profile);
 
   inline void boundIndex(Eigen::Vector3i& id);
@@ -211,6 +244,8 @@ public:
   bool odomValid();
   void getRegion(Eigen::Vector3d& ori, Eigen::Vector3d& size);
   inline double getResolution();
+  inline Eigen::Vector3d getMapMinBoundary() const;
+  inline Eigen::Vector3d getMapMaxBoundary() const;
   Eigen::Vector3d getOrigin();
   int getVoxelNum();
 
@@ -222,6 +257,8 @@ private:
   MappingParameters mp_;
   MappingData md_;
   TraversabilityProfile traversability_profile_;
+  PctTraversabilityParameters pct_traversability_;
+  std::shared_ptr<PctTerrainMap> pct_terrain_map_;
 
   // get depth image and sensor pose
   void depthPoseCallback(const sensor_msgs::ImageConstPtr& img,
@@ -229,6 +266,7 @@ private:
   void sensorPoseCallback(const nav_msgs::OdometryConstPtr& pose);
   void slidingMapFrameCallback(const nav_msgs::OdometryConstPtr& pose);
   void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& img);
+  void pctTerrainMapCallback(const pct_planner::PctTerrainMapConstPtr& msg);
 
   // update occupancy by raycasting
   void updateOccupancyCallback(const ros::TimerEvent& /*event*/);
@@ -256,6 +294,8 @@ private:
   void applyOccupancyUpdate(const Eigen::Vector3i& id, double new_log_odds);
   void rebuildInflationOffsets();
   void rebuildSupportSamples(const string& model);
+  Eigen::Vector3d footprintSamplePosition(const Eigen::Vector3d& pos, double yaw,
+                                          const Eigen::Vector2d& sample) const;
   void markSupportColumnDirty(const Eigen::Vector3i& id);
   void updateSupportColumn(const Eigen::Vector3i& id);
   void refreshSupportMap();
@@ -282,7 +322,7 @@ private:
   shared_ptr<message_filters::Subscriber<nav_msgs::Odometry>> depth_pose_sub_;
   SynchronizerImagePose sync_image_pose_;
 
-  ros::Subscriber lidar_pose_sub_, sliding_map_frame_sub_, cloud_sub_;
+  ros::Subscriber lidar_pose_sub_, sliding_map_frame_sub_, cloud_sub_, pct_terrain_map_sub_;
   ros::Publisher map_pub_, map_inf_pub_, sliding_map_bbox_pub_;
   ros::Publisher unknown_pub_;
   ros::Publisher depth_cloud_pub_, extrinsic_pose_pub_;
@@ -496,5 +536,9 @@ inline void GridMap::inflatePoint(const Eigen::Vector3i& pt, int inf_step_xy, in
 }
 
 inline double GridMap::getResolution() { return mp_.resolution_; }
+
+inline Eigen::Vector3d GridMap::getMapMinBoundary() const { return mp_.map_min_boundary_; }
+
+inline Eigen::Vector3d GridMap::getMapMaxBoundary() const { return mp_.map_max_boundary_; }
 
 #endif
