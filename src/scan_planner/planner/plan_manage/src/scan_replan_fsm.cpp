@@ -224,6 +224,10 @@ namespace scan_planner
     data_disp_pub_ = nh.advertise<scan_planner::DataDisp>("/planning/data_display", 100);
     self_inflation_pub_ = nh.advertise<visualization_msgs::Marker>("self_inflation", 10, true);
     global_reference_path_pub_ = nh.advertise<nav_msgs::Path>("/planning/global_reference_path", 1, true);
+    downsampled_reference_path_pub_ =
+        nh.advertise<nav_msgs::Path>("/planning/downsampled_reference_path", 1, true);
+    reference_path_z_profile_pub_ =
+        nh.advertise<nav_msgs::Path>("/planning/reference_path_z_profile", 1, true);
 
     if (navi_mode_ == NAVI_MODE::MANUAL_TARGET)
       goal_sub_ = nh.subscribe("/move_base_simple/goal", 1, &SCANReplanFSM::rvizGoalCallback, this);
@@ -599,10 +603,42 @@ namespace scan_planner
     else
       waypoints.insert(waypoints.begin(), odom_pos_);
 
-    // Keep an immutable, already height-normalized PCT profile for local
-    // B-spline initialization. The global trajectory can contain prior local
-    // replacements, so it is not an appropriate source for terrain height.
-    if (!reference_path_z_profile_.setPath(waypoints))
+    nav_msgs::Path downsampled_path;
+    downsampled_path.header = msg->header;
+    if (downsampled_path.header.frame_id.empty())
+      downsampled_path.header.frame_id = self_inflation_frame_id_.empty() ? "world" : self_inflation_frame_id_;
+    downsampled_path.header.stamp = ros::Time::now();
+    downsampled_path.poses.reserve(waypoints.size());
+    for (const Eigen::Vector3d &waypoint : waypoints)
+    {
+      geometry_msgs::PoseStamped pose;
+      pose.header = downsampled_path.header;
+      pose.pose.position.x = waypoint.x();
+      pose.pose.position.y = waypoint.y();
+      pose.pose.position.z = waypoint.z();
+      pose.pose.orientation.w = 1.0;
+      downsampled_path.poses.push_back(pose);
+    }
+    downsampled_reference_path_pub_.publish(downsampled_path);
+
+    nav_msgs::Path z_profile_path;
+    z_profile_path.header = downsampled_path.header;
+    z_profile_path.poses.reserve(raw_waypoints.size());
+    for (const Eigen::Vector3d &point : raw_waypoints)
+    {
+      geometry_msgs::PoseStamped pose;
+      pose.header = z_profile_path.header;
+      pose.pose.position.x = point.x();
+      pose.pose.position.y = point.y();
+      pose.pose.position.z = point.z();
+      pose.pose.orientation.w = 1.0;
+      z_profile_path.poses.push_back(pose);
+    }
+    reference_path_z_profile_pub_.publish(z_profile_path);
+
+    // Keep the complete, ordered PCT path as the height profile. Unlike the
+    // simplified planning waypoints above, it must not be rewritten by odom.
+    if (!reference_path_z_profile_.setPath(raw_waypoints))
       ROS_WARN("[pathCallback] Reference path has no usable XY progress; use linear Z initialization.");
     reference_path_z_progress_ = 0.0;
 
@@ -993,6 +1029,23 @@ namespace scan_planner
       start_vel_ = info->velocity_traj_.evaluateDeBoorT(t_cur);
       start_acc_ = info->acceleration_traj_.evaluateDeBoorT(t_cur);
 
+      // In reference-path mode the replan starts from the *predicted* point
+      // on the active local trajectory, rather than directly from odometry.
+      // Keep both states in the log: a Z mismatch here identifies whether an
+      // abnormal trajectory is being fed back into the next replan.
+      ROS_DEBUG_THROTTLE(1.0,
+                         "[ReplanZDiag] replan from active trajectory: traj_id=%d, t_cur=%.3f/%.3f, "
+                         "pred_pos=[%.3f, %.3f, %.3f], pred_vel=[%.3f, %.3f, %.3f], pred_acc=[%.3f, %.3f, %.3f], "
+                         "odom_pos=[%.3f, %.3f, %.3f], odom_vel=[%.3f, %.3f, %.3f], delta_pos=[%.3f, %.3f, %.3f]",
+                         info->traj_id_, t_cur, info->duration_,
+                         start_pt_.x(), start_pt_.y(), start_pt_.z(),
+                         start_vel_.x(), start_vel_.y(), start_vel_.z(),
+                         start_acc_.x(), start_acc_.y(), start_acc_.z(),
+                         odom_pos_.x(), odom_pos_.y(), odom_pos_.z(),
+                         odom_vel_.x(), odom_vel_.y(), odom_vel_.z(),
+                         (start_pt_ - odom_pos_).x(), (start_pt_ - odom_pos_).y(),
+                         (start_pt_ - odom_pos_).z());
+
       bool success = callReboundReplan(false, false);
       if (!success)
       {
@@ -1125,18 +1178,23 @@ namespace scan_planner
 
     const bool use_reference_z = navi_mode_ == NAVI_MODE::REFERENCE_PATH &&
                                  reference_path_z_profile_.valid();
-    const double reference_start_progress = use_reference_z ?
-        projectReferencePathProgress(start_pt_, reference_path_z_progress_,
-                                     reference_path_z_profile_.totalProgress()) : 0.0;
-    const double reference_target_progress = use_reference_z ?
-        projectReferencePathProgress(local_target_pt_, reference_start_progress,
-                                     reference_path_z_profile_.totalProgress()) : 0.0;
+    double reference_start_progress = 0.0;
+    if (use_reference_z)
+    {
+      const Eigen::Vector2d previous_xy =
+          reference_path_z_profile_.sampleXY(reference_path_z_progress_);
+      const double max_start_progress = reference_path_z_progress_ +
+          (start_pt_.head<2>() - previous_xy).norm() + reference_path_min_distance_;
+      reference_start_progress = projectReferencePathProgress(
+          start_pt_, reference_path_z_progress_, max_start_progress);
+    }
 
     bool plan_success =
         planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_,
                                         (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj,
                                         use_reference_z ? &reference_path_z_profile_ : nullptr,
-                                        reference_start_progress, reference_target_progress);
+                                        reference_start_progress,
+                                        reference_path_min_distance_);
     have_new_target_ = false;
 
     if (plan_success && use_reference_z)

@@ -107,7 +107,8 @@ namespace scan_planner
     ros::NodeHandle node_;
     ros::Timer exec_timer_, safety_timer_;
     ros::Subscriber goal_sub_, odom_sub_, path_sub_, go2_execution_frozen_sub_;
-    ros::Publisher replan_pub_, new_pub_, bspline_pub_, data_disp_pub_, self_inflation_pub_, global_reference_path_pub_;
+    ros::Publisher replan_pub_, new_pub_, bspline_pub_, data_disp_pub_, self_inflation_pub_,
+        global_reference_path_pub_, downsampled_reference_path_pub_, reference_path_z_profile_pub_;
 
     /* helper functions */
     bool callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj); // front-end and back-end method

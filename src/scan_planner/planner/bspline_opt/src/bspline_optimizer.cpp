@@ -1015,11 +1015,54 @@ namespace scan_planner
 
             if (t <= bspline_interval_) // First 3 control points in obstacles!
             {
-              cout << cps_.points.col(1).transpose() << "\n"
-                   << cps_.points.col(2).transpose() << "\n"
-                   << cps_.points.col(3).transpose() << "\n"
-                   << cps_.points.col(4).transpose() << endl;
-              ROS_WARN("First 3 control points in obstacles! return false, t=%f", t);
+              // This check uses getPlanningOccupancy(), which can reject a
+              // point for either an inflated SCAN obstacle or PCT terrain
+              // traversability.  Log both the combined reason and the raw
+              // SCAN state so a failure is diagnosable from a bag/log alone.
+              const auto reasonName = [](GridMap::PlanningOccupancyReason reason) {
+                switch (reason)
+                {
+                  case GridMap::PlanningOccupancyReason::kFree: return "free";
+                  case GridMap::PlanningOccupancyReason::kInflatedObstacle: return "inflated_scan_obstacle";
+                  case GridMap::PlanningOccupancyReason::kPctInvalidMap: return "pct_invalid_map";
+                  case GridMap::PlanningOccupancyReason::kPctOutOfMap: return "pct_out_of_map";
+                  case GridMap::PlanningOccupancyReason::kPctNoElevation: return "pct_no_elevation";
+                  case GridMap::PlanningOccupancyReason::kPctCostTooHigh: return "pct_cost_too_high";
+                  case GridMap::PlanningOccupancyReason::kPctHeightMismatch: return "pct_height_mismatch";
+                  case GridMap::PlanningOccupancyReason::kUnsupportedFootprint: return "unsupported_footprint";
+                }
+                return "unknown";
+              };
+              const auto occupancyType = [&reasonName](int planning_occ,
+                                                       GridMap::PlanningOccupancyReason reason) {
+                // -1 is returned by the SCAN map query when the robot
+                // footprint falls outside its sliding-map bounds.  It is not
+                // an inflated obstacle, despite being treated as a collision.
+                return planning_occ == -1 ? "scan_map_out_of_bounds" : reasonName(reason);
+              };
+
+              const double collision_yaw = estimateSegmentYaw(pos, pos_next);
+              GridMap::PlanningOccupancyReason collision_reason;
+              const int collision_planning_occ = grid_map_->getPlanningOccupancy(
+                  pos, collision_yaw, &collision_reason);
+              ROS_WARN("[BsplineOptimizer] First 3 control points collision: t=%.3f, pos=[%.3f, %.3f, %.3f], yaw=%.3f, type=%s, planning_occ=%d, raw_scan_occ=%d, inflated_scan_occ=%d. Return false.",
+                       t, pos.x(), pos.y(), pos.z(), collision_yaw, occupancyType(collision_planning_occ, collision_reason),
+                       collision_planning_occ, grid_map_->getOccupancy(pos),
+                       grid_map_->getInflateOccupancy(pos, collision_yaw));
+
+              const int first_control_point = 1;
+              const int last_control_point = std::min(4, static_cast<int>(cps_.points.cols()) - 1);
+              for (int control_point = first_control_point; control_point <= last_control_point; ++control_point)
+              {
+                const Eigen::Vector3d control_pos = cps_.points.col(control_point);
+                const double control_yaw = estimateControlPointYaw(cps_.points, control_point);
+                GridMap::PlanningOccupancyReason reason;
+                const int planning_occ = grid_map_->getPlanningOccupancy(control_pos, control_yaw, &reason);
+                ROS_WARN("[BsplineOptimizer] control_point[%d]=[%.3f, %.3f, %.3f], yaw=%.3f, type=%s, planning_occ=%d, raw_scan_occ=%d, inflated_scan_occ=%d",
+                         control_point, control_pos.x(), control_pos.y(), control_pos.z(), control_yaw,
+                         occupancyType(planning_occ, reason), planning_occ, grid_map_->getOccupancy(control_pos),
+                         grid_map_->getInflateOccupancy(control_pos, control_yaw));
+              }
               return false;
             }
 

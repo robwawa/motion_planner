@@ -72,7 +72,7 @@ namespace scan_planner
     void applyReferencePathZ(std::vector<Eigen::Vector3d> &points,
                              const ReferencePathZProfile &reference_profile,
                              const double start_progress,
-                             const double target_progress,
+                             const double projection_tolerance,
                              const double start_z,
                              const double target_z)
     {
@@ -81,8 +81,16 @@ namespace scan_planner
         applyLinearZReference(points, start_z, target_z);
         return;
       }
-      reference_profile.applyToInitialPath(points, start_progress, target_progress,
-                                           start_z, target_z);
+      const ReferencePathZApplyResult result = reference_profile.applyToInitialPath(
+          points, start_progress, projection_tolerance, start_z, target_z);
+      if (std::fabs(result.final_profile_z - target_z) > projection_tolerance)
+      {
+        ROS_WARN_THROTTLE(1.0,
+                          "[ReplanZDiag] Reference Z endpoint mismatch: segment=%zu, progress=%.3f, "
+                          "profile_z=%.3f, target_z=%.3f, delta=%.3f",
+                          result.final_segment_index, result.final_progress,
+                          result.final_profile_z, target_z, result.final_profile_z - target_z);
+      }
     }
   } // namespace
 
@@ -127,7 +135,7 @@ namespace scan_planner
                                         Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj,
                                         const ReferencePathZProfile *z_reference_profile,
                                         double z_reference_start_progress,
-                                        double z_reference_target_progress)
+                                        double z_projection_tolerance)
   {
 
     static int count = 0;
@@ -296,10 +304,29 @@ namespace scan_planner
 
     if (z_reference_profile != nullptr && z_reference_profile->valid())
       applyReferencePathZ(point_set, *z_reference_profile, z_reference_start_progress,
-                          z_reference_target_progress,
+                          z_projection_tolerance,
                           start_pt(2), local_target_pt(2));
     else
       applyLinearZReference(point_set, start_pt(2), local_target_pt(2));
+
+    // The point set height is overwritten by the reference profile above,
+    // whereas parameterizeToBspline also enforces the four boundary
+    // derivatives below.  Log both inputs to expose an inconsistent Z state
+    // before it becomes abnormal B-spline control points.
+    double point_set_min_z = point_set.front().z();
+    double point_set_max_z = point_set_min_z;
+    for (const Eigen::Vector3d& point : point_set)
+    {
+      point_set_min_z = std::min(point_set_min_z, point.z());
+      point_set_max_z = std::max(point_set_max_z, point.z());
+    }
+    ROS_DEBUG_THROTTLE(1.0,
+                       "[ReplanZDiag] B-spline input: ref_z=%s, point_z=[%.3f, %.3f], "
+                       "start_z=%.3f, target_z=%.3f, derivative_z=[vel_start=%.3f, vel_end=%.3f, acc_start=%.3f, acc_end=%.3f], ts=%.3f",
+                       z_reference_profile != nullptr && z_reference_profile->valid() ? "profile" : "linear",
+                       point_set_min_z, point_set_max_z, start_pt.z(), local_target_pt.z(),
+                       start_end_derivatives[0].z(), start_end_derivatives[1].z(),
+                       start_end_derivatives[2].z(), start_end_derivatives[3].z(), ts);
 
     Eigen::MatrixXd ctrl_pts;
     UniformBspline::parameterizeToBspline(ts, point_set, start_end_derivatives, ctrl_pts);
@@ -311,6 +338,9 @@ namespace scan_planner
 
     static int vis_id = 0;
     visualization_->displayInitPathList(point_set, 0.2, 0);
+    // Publish the parameterized control points so RViz exposes the geometry
+    // passed to collision checking, including failed replans.
+    visualization_->displayOptimalList(ctrl_pts, vis_id);
     visualization_->displayAStarList(a_star_paths, vis_id);
 
     t_start = ros::Time::now();

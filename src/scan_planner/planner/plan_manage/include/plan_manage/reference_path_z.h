@@ -7,6 +7,13 @@
 
 namespace scan_planner
 {
+  struct ReferencePathZApplyResult
+  {
+    double final_progress{0.0};
+    double final_profile_z{0.0};
+    size_t final_segment_index{0};
+  };
+
   class ReferencePathZProfile
   {
   public:
@@ -15,16 +22,19 @@ namespace scan_planner
 
     double totalProgress() const;
     double sampleZ(double progress) const;
+    Eigen::Vector2d sampleXY(double progress) const;
     double projectProgress(const Eigen::Vector3d &point, double min_progress,
                            double max_progress) const;
 
-    void applyToInitialPath(std::vector<Eigen::Vector3d> &points,
-                            double start_progress, double target_progress,
-                            double start_z, double target_z) const;
+    ReferencePathZApplyResult applyToInitialPath(
+        std::vector<Eigen::Vector3d> &points, double start_progress,
+        double projection_tolerance, double start_z, double target_z) const;
 
   private:
     std::vector<Eigen::Vector3d> path_;
     std::vector<double> xy_progress_;
+
+    size_t segmentIndex(double progress) const;
   };
 } // namespace scan_planner
 

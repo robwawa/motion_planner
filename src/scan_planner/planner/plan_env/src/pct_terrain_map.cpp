@@ -3,6 +3,22 @@
 #include <cmath>
 #include <limits>
 
+namespace {
+
+int roundHalfToEven(double value) {
+  const double lower_value = std::floor(value);
+  const double fraction = value - lower_value;
+  const int lower = static_cast<int>(lower_value);
+
+  if (fraction < 0.5)
+    return lower;
+  if (fraction > 0.5)
+    return lower + 1;
+  return (lower % 2 == 0) ? lower : lower + 1;
+}
+
+}  // namespace
+
 std::size_t PctTerrainMap::address(int layer, int row, int col) const {
   return (static_cast<std::size_t>(layer) * rows_ + row) * cols_ + col;
 }
@@ -52,10 +68,11 @@ PctTerrainMap::QueryStatus PctTerrainMap::queryTraversableLayer(
   if (!valid_)
     return QueryStatus::kInvalidMap;
 
-  // Match the CPU implementation and CUDA round(): half values round away
-  // from zero.  This must stay consistent with PCT map construction.
-  const int row = static_cast<int>(std::round((x - center_x_) / resolution_)) + rows_ / 2;
-  const int col = static_cast<int>(std::round((y - center_y_) / resolution_)) + cols_ / 2;
+  // Match NumPy np.round() used by the PCT global planner: exact half values
+  // round to the nearest even grid index. This keeps SCAN on the same PCT
+  // cell as the reference path at half-grid boundaries.
+  const int row = roundHalfToEven((x - center_x_) / resolution_) + rows_ / 2;
+  const int col = roundHalfToEven((y - center_y_) / resolution_) + cols_ / 2;
   if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
     return QueryStatus::kOutOfMap;
 

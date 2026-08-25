@@ -73,7 +73,7 @@
     <param name="grid_map/sliding_map_size_y" value="10.0" />
     <param name="grid_map/sliding_map_size_z" value="5.0" />
     <param name="grid_map/map_sliding_thresh" value="0.2"/>
-    <param name="grid_map/double_cylinder_radius" value="0.025" />
+    <param name="grid_map/double_cylinder_radius" value="0.25" />
     <param name="grid_map/double_cylinder_offset" value="0.18" />
     <!-- 向上膨胀 -->
     <param name="grid_map/obstacles_inflation_z_up" value="0.0" />  
