@@ -68,6 +68,7 @@ namespace scan_planner
       points.front()(2) = start_z;
       points.back()(2) = target_z;
     }
+<<<<<<< HEAD
 
     void applyReferencePathZ(std::vector<Eigen::Vector3d> &points,
                              const ReferencePathZProfile &reference_profile,
@@ -92,6 +93,8 @@ namespace scan_planner
                           result.final_profile_z, target_z, result.final_profile_z - target_z);
       }
     }
+=======
+>>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   } // namespace
 
   // SECTION interfaces for setup and query
@@ -133,9 +136,13 @@ namespace scan_planner
   bool SCANPlannerManager::reboundReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel,
                                         Eigen::Vector3d start_acc, Eigen::Vector3d local_target_pt,
                                         Eigen::Vector3d local_target_vel, bool flag_polyInit, bool flag_randomPolyTraj,
+<<<<<<< HEAD
                                         const ReferencePathZProfile *z_reference_profile,
                                         double z_reference_start_progress,
                                         double z_projection_tolerance)
+=======
+                                        bool preserve_generated_z)
+>>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   {
 
     static int count = 0;
@@ -302,11 +309,15 @@ namespace scan_planner
       }
     } while (flag_regenerate);
 
+<<<<<<< HEAD
     if (z_reference_profile != nullptr && z_reference_profile->valid())
       applyReferencePathZ(point_set, *z_reference_profile, z_reference_start_progress,
                           z_projection_tolerance,
                           start_pt(2), local_target_pt(2));
     else
+=======
+    if (!preserve_generated_z)
+>>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
       applyLinearZReference(point_set, start_pt(2), local_target_pt(2));
 
     // The point set height is overwritten by the reference profile above,

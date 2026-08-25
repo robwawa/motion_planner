@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 
+<<<<<<< HEAD
 namespace {
 
 int roundHalfToEven(double value) {
@@ -19,6 +20,8 @@ int roundHalfToEven(double value) {
 
 }  // namespace
 
+=======
+>>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
 std::size_t PctTerrainMap::address(int layer, int row, int col) const {
   return (static_cast<std::size_t>(layer) * rows_ + row) * cols_ + col;
 }
@@ -68,11 +71,19 @@ PctTerrainMap::QueryStatus PctTerrainMap::queryTraversableLayer(
   if (!valid_)
     return QueryStatus::kInvalidMap;
 
+<<<<<<< HEAD
   // Match NumPy np.round() used by the PCT global planner: exact half values
   // round to the nearest even grid index. This keeps SCAN on the same PCT
   // cell as the reference path at half-grid boundaries.
   const int row = roundHalfToEven((x - center_x_) / resolution_) + rows_ / 2;
   const int col = roundHalfToEven((y - center_y_) / resolution_) + cols_ / 2;
+=======
+  // Python: idx = round((pos-center)/resolution) + offset; then [y, x].
+  // Python/NumPy round is banker's rounding; std::nearbyint has the same
+  // default ties-to-even mode and avoids silently changing boundary cells.
+  const int row = static_cast<int>(std::nearbyint((x - center_x_) / resolution_)) + rows_ / 2;
+  const int col = static_cast<int>(std::nearbyint((y - center_y_) / resolution_)) + cols_ / 2;
+>>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   if (row < 0 || row >= rows_ || col < 0 || col >= cols_)
     return QueryStatus::kOutOfMap;
 

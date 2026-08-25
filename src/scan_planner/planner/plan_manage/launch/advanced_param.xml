@@ -84,7 +84,12 @@
     <param name="terrain_check/use_scan_support" value="$(arg use_scan_support)" type="bool" />
     <param name="terrain_check/use_pct_traversability" value="$(arg use_pct_traversability)" type="bool" />
     <param name="pct_traversability/topic" value="$(arg pct_terrain_map_topic)" type="str" />
+<<<<<<< HEAD
     <param name="pct_traversability/max_height_error" value="0.40" type="double" />
+=======
+    <param name="pct_traversability/max_height_error" value="0.20" type="double" />
+    <param name="pct_traversability/unknown_as_obstacle" value="true" type="bool" />
+>>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
     <param name="pct_traversability/debug_rejection_stats" value="true" type="bool" />
 
     <!-- 地面支撑约束：SCAN 显式启用，其他机器人可在各自配置中关闭或替换足迹。 -->
