@@ -55,7 +55,7 @@
     <param name="fsm/reference_path_mode" value="$(arg reference_path_mode)" type="str"/>
 
     <!-- 自适应前视：仅 REFERENCE_PATH + polyline_rolling_window 生效。 -->
-    <param name="fsm/adaptive_horizon_enabled" value="false" type="bool"/>
+    <param name="fsm/adaptive_horizon_enabled" value="true" type="bool"/>
     <!-- 自适应前视：最小前视距离 -->
     <param name="fsm/adaptive_horizon_min" value="3.5" type="double"/>
     <!-- 自适应前视：最大前视距离 -->
@@ -84,12 +84,7 @@
     <param name="terrain_check/use_scan_support" value="$(arg use_scan_support)" type="bool" />
     <param name="terrain_check/use_pct_traversability" value="$(arg use_pct_traversability)" type="bool" />
     <param name="pct_traversability/topic" value="$(arg pct_terrain_map_topic)" type="str" />
-<<<<<<< HEAD
     <param name="pct_traversability/max_height_error" value="0.40" type="double" />
-=======
-    <param name="pct_traversability/max_height_error" value="0.20" type="double" />
-    <param name="pct_traversability/unknown_as_obstacle" value="true" type="bool" />
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
     <param name="pct_traversability/debug_rejection_stats" value="true" type="bool" />
 
     <!-- 地面支撑约束：SCAN 显式启用，其他机器人可在各自配置中关闭或替换足迹。 -->
