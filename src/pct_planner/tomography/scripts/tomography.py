@@ -43,6 +43,7 @@ def create_tomogram(profile, backend):
 class Tomography(object):
     def __init__(self, cfg, profile, backend='auto', pcd_file=None,
                  tomogram_name=None):
+        self.cfg = cfg
         self.export_dir = rsg_root + cfg.map.export_dir
         self.pcd_file = pcd_file
         self.tomogram_name = tomogram_name
@@ -51,6 +52,11 @@ class Tomography(object):
         self.slice_dh = profile.map.slice_dh
 
         self.center = np.zeros(2, dtype=np.float32)
+        cache_path = os.path.join(self.export_dir, self.tomogram_name + '.pickle')
+        if os.path.isfile(cache_path):
+            self.loadCachedTomogram(cache_path)
+            return
+
         self.tomogram, self.backend = create_tomogram(profile, backend)
         rospy.loginfo('Tomogram backend: %s', self.backend)
         points = self.loadPCD(self.pcd_file)
@@ -58,25 +64,51 @@ class Tomography(object):
         # Process
         self.process(points)
 
-    def initROS(self):
-        self.map_frame = cfg.ros.map_frame
+    def loadCachedTomogram(self, cache_path):
+        with open(cache_path, 'rb') as handle:
+            data_dict = pickle.load(handle)
 
-        pointcloud_topic = cfg.ros.pointcloud_topic
+        tomogram = np.asarray(data_dict['data'], dtype=np.float32)
+        if tomogram.ndim != 4 or tomogram.shape[0] != 5:
+            raise RuntimeError('invalid cached tomogram: {}'.format(cache_path))
+
+        self.resolution = float(data_dict['resolution'])
+        self.center = np.asarray(data_dict['center'], dtype=np.float32)
+        self.slice_h0 = float(data_dict['slice_h0'])
+        self.slice_dh = float(data_dict['slice_dh'])
+        self.n_slice = tomogram.shape[1]
+        self.map_dim_x = tomogram.shape[2]
+        self.map_dim_y = tomogram.shape[3]
+        self.VISPROTO_I, self.VISPROTO_P = \
+            GRID_POINTS_XYZI(self.resolution, self.map_dim_x, self.map_dim_y)
+
+        layers_t, _, _, layers_g, layers_c = tomogram
+        rospy.loginfo('Reusing cached tomogram: %s', cache_path)
+        self.initROS()
+        self.publishLayers(self.layer_G_pub_list, layers_g, layers_t)
+        self.publishLayers(self.layer_C_pub_list, layers_c, None)
+        self.publishTomogram(layers_g, layers_t)
+        self.publishTerrainMap(layers_g, layers_t)
+
+    def initROS(self):
+        self.map_frame = self.cfg.ros.map_frame
+
+        pointcloud_topic = self.cfg.ros.pointcloud_topic
         self.pointcloud_pub = rospy.Publisher(pointcloud_topic, PointCloud2, latch=True, queue_size=1)
 
         self.layer_G_pub_list = []
         self.layer_C_pub_list = []
-        layer_G_topic = cfg.ros.layer_G_topic
-        layer_C_topic = cfg.ros.layer_C_topic
+        layer_G_topic = self.cfg.ros.layer_G_topic
+        layer_C_topic = self.cfg.ros.layer_C_topic
         for i in range(self.n_slice):
             layer_G_pub = rospy.Publisher(layer_G_topic + str(i), PointCloud2, latch=True, queue_size=1)
             self.layer_G_pub_list.append(layer_G_pub)
             layer_C_pub = rospy.Publisher(layer_C_topic + str(i), PointCloud2, latch=True, queue_size=1)
             self.layer_C_pub_list.append(layer_C_pub)
 
-        tomogram_topic = cfg.ros.tomogram_topic
+        tomogram_topic = self.cfg.ros.tomogram_topic
         self.tomogram_pub = rospy.Publisher(tomogram_topic, PointCloud2, latch=True, queue_size=1)
-        terrain_map_topic = rospy.get_param('~terrain_map_topic', cfg.ros.terrain_map_topic)
+        terrain_map_topic = rospy.get_param('~terrain_map_topic', self.cfg.ros.terrain_map_topic)
         self.terrain_map_pub = rospy.Publisher(terrain_map_topic, PctTerrainMap, latch=True, queue_size=1)
 
     def loadPCD(self, pcd_file):

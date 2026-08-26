@@ -167,10 +167,6 @@ struct TraversabilityProfile {
 
 struct PctTraversabilityParameters {
   bool enabled{false};
-<<<<<<< HEAD
-=======
-  bool unknown_as_obstacle{true};
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   bool debug_rejection_stats{false};
   double cost_threshold{20.0};
   double max_height_error{0.20};

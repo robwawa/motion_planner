@@ -97,11 +97,8 @@ namespace scan_planner
     bool have_final_yaw_{false};
     Eigen::Vector3d local_target_pt_, local_target_vel_;                     // local target state
     std::vector<Eigen::Vector3d> active_waypoints_;
-<<<<<<< HEAD
     ReferencePathZProfile reference_path_z_profile_;
     double reference_path_z_progress_{0.0};
-=======
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
     int current_wp_;
 
     bool flag_escape_emergency_;
@@ -129,12 +126,9 @@ namespace scan_planner
     bool planNextWaypoint();
     bool isWaypointSequenceMode() const;
     bool usePolylineRollingWindow() const;
-<<<<<<< HEAD
     double projectReferencePathProgress(const Eigen::Vector3d &point,
                                         double min_progress,
                                         double max_progress) const;
-=======
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
     bool adjustGlobalTargetIfOccupied();
     void getLocalTarget();
     void finishProcess();

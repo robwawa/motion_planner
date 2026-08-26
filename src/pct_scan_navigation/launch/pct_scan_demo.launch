@@ -2,14 +2,16 @@
   <!-- Keep SCAN's collision map aligned with the PCT input PCD.  The argument
        can be overridden for custom map files, e.g. pcd_map_file:=/tmp/map.pcd. -->
   <arg name="pcd_map_file"
-       default="$(find pct_planner)/rsc/pcd/plaza3_10.pcd" doc="可用 plaza3_10,building2_9" />
+       default="$(find pct_planner)/rsc/pcd/building2_9.pcd" doc="可用 plaza3_10,building2_9,building3.0" />
   <!-- Must identify the tomogram built from pcd_map_file.  Supply a unique
        name when overriding pcd_map_file, e.g. best2_jetson_run2. -->
   <arg name="tomogram_name"
-       default="plaza3_10" />
+       default="building2_9" />
   <arg name="controller_mode" default="open_loop" doc="open_loop for 3D path playback; closed_loop for same-floor Twist control" />
   <arg name="use_gpu" default="false" />
   <arg name="optimize_path" default="true" doc="PCT optimized path; set false for raw A* path" />
+  <arg name="body_height" default="0.36"
+       doc="Robot base height above the traversable surface (m)" />
   <arg name="reference_path_mode" default="polyline_rolling_window"
        doc="SCAN reference behavior: min_snap_single_pass or polyline_rolling_window" />
 
@@ -17,6 +19,7 @@
   <include file="$(find pct_planner)/launch/planner.launch">
     <arg name="optimize_path" value="$(arg optimize_path)" />
     <arg name="tomogram_name" value="$(arg tomogram_name)" />
+    <arg name="body_height" value="$(arg body_height)" />
   </include>
 
   <!-- Publish the PCT tomogram and visualization layers in the same map frame
@@ -38,9 +41,10 @@
     <arg name="reference_path_mode" value="$(arg reference_path_mode)" />
     <arg name="use_pcd_map" value="true" />
     <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
-    <arg name="init_x" value="5.0" />
-    <arg name="init_y" value="5.0" />
-    <arg name="init_z" value="0.4" />
+    <arg name="body_height" value="$(arg body_height)" />
+    <arg name="init_x" value="-5.02" />
+    <arg name="init_y" value="6.87" />
+    <arg name="init_z" value="$(arg body_height)" />
   </include>
 
   <include file="$(find pct_scan_navigation)/launch/navigation.launch">

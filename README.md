@@ -14,6 +14,15 @@ catkin_make
 source devel/setup.bash
 ```
 
+PCT 的 CPU 原生扩展默认使用 ROS Noetic 的系统 Python 构建：
+
+```bash
+src/pct_planner/planner/build.sh
+```
+
+也可以通过 `PCT_PYTHON_EXECUTABLE=/path/to/python3` 显式选择 Python；生成扩展的
+`cpython-XY` ABI 必须与运行 PCT 节点的 Python 一致。
+
 SCAN-Planner 的 CPU 仿真需要 Armadillo、PCL、Eigen 和 ROS Noetic 的相关消息包。GPU 渲染不是基础构建的必要条件。
 
 ## 启动 SCAN-Planner 仿真
@@ -42,6 +51,40 @@ RViz 可单独启动：
 ```bash
 roslaunch scan_planner rviz.launch
 ```
+
+## 启动 Gazebo 仿真
+
+Gazebo 仿真使用与 `3d-navi` 相同的 Building 世界、Unitree A1 模型、12 关节控制器、
+Gazebo 状态里程计和 Livox 点云链路。先使用无强化学习控制器的模式验证基础仿真：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+roslaunch pct_scan_gazebo gazebo.launch \
+  gui:=false headless:=true paused:=false launch_rl:=false
+```
+
+完整的 PCT + SCAN + Gazebo 仿真分两步启动。先启动 A1、传感器和强化学习控制器：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+roslaunch pct_scan_gazebo gazebo.launch \
+  gui:=true paused:=false launch_rl:=true
+```
+
+确认 12 个关节控制器加载完成后，在另一终端运行规划侧车：
+
+```bash
+export CONDA_ENV_PATH=/path/to/inspection
+roslaunch pct_scan_gazebo pct_scan_navigation_sidecar.launch \
+  controller_mode:=closed_loop
+```
+
+PCT CPU 节点使用 ROS Noetic 的系统 Python；`CONDA_ENV_PATH` 仅供强化学习控制器
+加载 TorchScript 模型。基础 Gazebo 仿真不依赖 Conda；设置 `launch_rl:=false`
+即可跳过 TorchScript 控制器。Gazebo A1 的导航机身高度默认使用其稳定站立高度
+`0.315 m`；`init_z:=0.6` 仅用于机器人生成时避免与地面相交。
 
 默认仿真地图由 `mockamap` 生成，CPU 传感器节点发布点云，局部规划器输出规划轨迹。真实机器人模式需将 `is_real_world` 设为 `true`，并按机器人实际话题修改参数。
 

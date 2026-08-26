@@ -1,0 +1,63 @@
+<launch>
+  <arg name="gui" default="true" />
+  <arg name="headless" default="false" />
+  <arg name="paused" default="false" />
+  <arg name="launch_rviz" default="true" />
+  <!-- A1's settled base height in this Gazebo model; 0.5 m is the old Go2 value. -->
+  <arg name="body_height" default="0.315" />
+  <arg name="controller_mode" default="closed_loop" />
+  <arg name="optimize_path" default="true" />
+  <arg name="reference_path_mode" default="polyline_rolling_window" />
+  <arg name="tomogram_name" default="building2_9" />
+  <arg name="pcd_map_file" default="$(find pct_planner)/rsc/pcd/building2_9.pcd" />
+  <arg name="conda_env_path"
+       default="$(optenv CONDA_ENV_PATH /media/wa/移动硬盘1/anaconda_env/conda_envs/inspection)" />
+
+  <include file="$(find pct_scan_gazebo)/launch/gazebo.launch">
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="headless" value="$(arg headless)" />
+    <arg name="paused" value="$(arg paused)" />
+    <arg name="conda_env_path" value="$(arg conda_env_path)" />
+  </include>
+
+  <include file="$(find pct_planner)/launch/planner.launch">
+    <arg name="tomogram_name" value="$(arg tomogram_name)" />
+    <arg name="optimize_path" value="$(arg optimize_path)" />
+    <arg name="body_height" value="$(arg body_height)" />
+  </include>
+  <include file="$(find pct_planner)/launch/tomography.launch">
+    <arg name="backend" value="cpu" />
+    <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
+    <arg name="tomogram_name" value="$(arg tomogram_name)" />
+  </include>
+
+  <include file="$(find scan_planner)/launch/run.launch">
+    <arg name="is_real_world" value="false" />
+    <arg name="use_external_simulator" value="true" />
+    <arg name="navi_mode" value="3" />
+    <arg name="sensor_type" value="lidar" />
+    <arg name="controller_mode" value="$(arg controller_mode)" />
+    <arg name="navigation_frame" value="map" />
+    <arg name="reference_path_topic" value="/navigation/reference_path" />
+    <arg name="reference_path_mode" value="$(arg reference_path_mode)" />
+    <arg name="body_pose_topic" value="/Odometry_gazebo" />
+    <arg name="sensor_pose_topic" value="/Odometry_gazebo" />
+    <arg name="cloud_topic" value="/livox/Pointcloud2" />
+    <arg name="cloud_is_world" value="true" />
+    <arg name="use_pcd_map" value="true" />
+    <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
+    <arg name="body_height" value="$(arg body_height)" />
+    <arg name="init_x" value="-5.0" />
+    <arg name="init_y" value="7.0" />
+    <arg name="init_z" value="$(arg body_height)" />
+  </include>
+
+  <include file="$(find pct_scan_navigation)/launch/navigation.launch">
+    <arg name="body_pose_topic" value="/Odometry_gazebo" />
+    <arg name="navigation_frame" value="map" />
+    <arg name="default_goal_z" value="$(arg body_height)" />
+  </include>
+
+  <node if="$(arg launch_rviz)" pkg="rviz" type="rviz" name="pct_scan_gazebo_rviz"
+        args="-d $(find scan_planner)/launch/default.rviz" output="screen" />
+</launch>

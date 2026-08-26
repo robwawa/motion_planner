@@ -30,13 +30,9 @@ namespace scan_planner
     /* main planning interface */
     bool reboundReplan(Eigen::Vector3d start_pt, Eigen::Vector3d start_vel, Eigen::Vector3d start_acc,
                        Eigen::Vector3d end_pt, Eigen::Vector3d end_vel, bool flag_polyInit, bool flag_randomPolyTraj,
-<<<<<<< HEAD
                        const ReferencePathZProfile *z_reference_profile = nullptr,
                        double z_reference_start_progress = 0.0,
                        double z_projection_tolerance = 0.0);
-=======
-                       bool preserve_generated_z = false);
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
     bool EmergencyStop(Eigen::Vector3d stop_pos);
     bool planGlobalTraj(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                         const Eigen::Vector3d &end_pos, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);

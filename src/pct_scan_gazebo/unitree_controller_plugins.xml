@@ -1,0 +1,8 @@
+<library path="lib/libpct_scan_gazebo_control">
+    <class name="pct_scan_gazebo/UnitreeJointController" 
+           type="unitree_legged_control::UnitreeJointController"           
+           base_class_type="controller_interface::ControllerBase"/>
+        <description>
+            The unitree joint controller.
+        </description>
+</library>

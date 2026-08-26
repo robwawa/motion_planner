@@ -1,0 +1,61 @@
+<launch>
+  <arg name="gui" default="true" />
+  <arg name="headless" default="false" />
+  <arg name="paused" default="true" />
+  <arg name="debug" default="false" />
+  <arg name="init_x" default="-5.0" />
+  <arg name="init_y" default="7.0" />
+  <arg name="init_z" default="0.6" />
+  <arg name="robot_name" default="a1" />
+  <arg name="model" default="$(find pct_scan_gazebo)/policy_act_inference_stair.pt" />
+  <arg name="launch_rl" default="true" />
+  <arg name="conda_env_path"
+       default="$(optenv CONDA_ENV_PATH /media/wa/移动硬盘1/anaconda_env/conda_envs/inspection)" />
+  <arg name="python_launch_prefix"
+       default="env PYTHONPATH=$(optenv PYTHONPATH) $(arg conda_env_path)/bin/python" />
+
+  <param name="use_sim_time" value="true" />
+  <env name="GAZEBO_MODEL_PATH"
+       value="$(find pct_scan_gazebo)/models:/usr/share/gazebo-11/models:$(optenv GAZEBO_MODEL_PATH)" />
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find pct_scan_gazebo)/worlds/Building.world" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="headless" value="$(arg headless)" />
+    <arg name="paused" value="$(arg paused)" />
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="use_sim_time" value="true" />
+  </include>
+
+  <param name="robot_description"
+         command="$(find xacro)/xacro --inorder '$(find pct_scan_gazebo)/a1_description/xacro/robot.xacro' DEBUG:=false" />
+  <node pkg="gazebo_ros" type="spawn_model" name="a1_urdf_spawner" output="screen"
+        args="-urdf -x $(arg init_x) -y $(arg init_y) -z $(arg init_z) -model $(arg robot_name)_gazebo -param robot_description -unpause" />
+
+  <node pkg="pct_scan_gazebo" type="state_from_gazebo" name="state_from_gazebo"
+        args="0 0 0 0 0 0" output="screen">
+    <param name="robot_name" value="$(arg robot_name)" />
+  </node>
+
+  <rosparam file="$(find pct_scan_gazebo)/a1_description/config/robot_control.yaml" command="load" />
+  <node pkg="controller_manager" type="spawner" name="a1_controller_spawner" ns="/$(arg robot_name)_gazebo"
+        output="screen" args="joint_state_controller
+          FL_hip_controller FL_thigh_controller FL_calf_controller
+          FR_hip_controller FR_thigh_controller FR_calf_controller
+          RL_hip_controller RL_thigh_controller RL_calf_controller
+          RR_hip_controller RR_thigh_controller RR_calf_controller" />
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="a1_robot_state_publisher" output="screen">
+    <remap from="/joint_states" to="/$(arg robot_name)_gazebo/joint_states" />
+  </node>
+  <node pkg="pct_scan_gazebo" type="pointcloud2livox.py" name="pointcloud2livox" output="screen">
+    <param name="laser_blind" value="0.5" />
+    <param name="min_angle" value="-7.0" />
+    <param name="max_angle" value="55.0" />
+    <param name="map_frame" value="map" />
+  </node>
+  <node if="$(arg launch_rl)" pkg="pct_scan_gazebo" type="rl_gazebo.py" name="a1_rl_policy" output="screen"
+        launch-prefix="$(arg python_launch_prefix)">
+    <param name="robot_name" value="$(arg robot_name)" />
+    <param name="model" value="$(arg model)" />
+  </node>
+</launch>

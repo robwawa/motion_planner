@@ -502,7 +502,6 @@ namespace scan_planner
            reference_path_mode_ == "polyline_rolling_window";
   }
 
-<<<<<<< HEAD
   double SCANReplanFSM::projectReferencePathProgress(const Eigen::Vector3d &point,
                                                       const double min_progress,
                                                       const double max_progress) const
@@ -512,8 +511,6 @@ namespace scan_planner
     return reference_path_z_profile_.projectProgress(point, min_progress, max_progress);
   }
 
-=======
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   bool SCANReplanFSM::adjustGlobalTargetIfOccupied()
   {
     auto map = planner_manager_->grid_map_;
@@ -606,7 +603,6 @@ namespace scan_planner
     else
       waypoints.insert(waypoints.begin(), odom_pos_);
 
-<<<<<<< HEAD
     nav_msgs::Path downsampled_path;
     downsampled_path.header = msg->header;
     if (downsampled_path.header.frame_id.empty())
@@ -646,8 +642,6 @@ namespace scan_planner
       ROS_WARN("[pathCallback] Reference path has no usable XY progress; use linear Z initialization.");
     reference_path_z_progress_ = 0.0;
 
-=======
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
     ROS_INFO("[pathCallback] Reference path reduced from %zu poses to %zu trajectory waypoints.",
              msg->poses.size(), waypoints.size());
 
@@ -1182,7 +1176,6 @@ namespace scan_planner
 
     getLocalTarget();
 
-<<<<<<< HEAD
     const bool use_reference_z = navi_mode_ == NAVI_MODE::REFERENCE_PATH &&
                                  reference_path_z_profile_.valid();
     double reference_start_progress = 0.0;
@@ -1202,13 +1195,10 @@ namespace scan_planner
                                         use_reference_z ? &reference_path_z_profile_ : nullptr,
                                         reference_start_progress,
                                         reference_path_min_distance_);
-=======
-    bool plan_success =
-        planner_manager_->reboundReplan(start_pt_, start_vel_, start_acc_, local_target_pt_, local_target_vel_,
-                                        (have_new_target_ || flag_use_poly_init), flag_randomPolyTraj,
-                                        navi_mode_ == NAVI_MODE::REFERENCE_PATH);
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
     have_new_target_ = false;
+
+    if (plan_success && use_reference_z)
+      reference_path_z_progress_ = reference_start_progress;
 
     cout << "final_plan_success=" << plan_success << endl;
 

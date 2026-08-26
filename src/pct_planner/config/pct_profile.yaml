@@ -7,11 +7,11 @@ map:
 traversability:
   kernel_size: 7
   interval_min: 0.50
-  interval_free: 0.65
+  interval_free: 0.50
   slope_max: 0.40
-  step_max: 0.17
-  standable_ratio: 0.20
+  step_max: 0.30
+  standable_ratio: 0.50
   cost_barrier: 50.0
-  safe_margin: 0.4
-  inflation: 0.2
-  cost_threshold: 20.0
+  safe_margin: 0.5
+  inflation: 0.1
+  cost_threshold: 49.0

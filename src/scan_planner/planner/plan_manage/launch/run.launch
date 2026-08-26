@@ -1,6 +1,7 @@
 <launch>
   <!-- real or sim -->
   <arg name="is_real_world" default="false"/>
+  <arg name="use_external_simulator" default="false"/>
 
   <!-- navigation mode -->
   <!-- 1: use 2D Nav Goal to select final goal  -->
@@ -19,12 +20,17 @@
   <arg name="reference_path_mode" default="min_snap_single_pass"/>
   <arg name="use_pcd_map" default="false"/>
   <arg name="pcd_map_file" default="$(find map_generator)/resource/building.pcd"/>
+  <arg name="body_height" default="0.4"/>
   <arg name="init_x" default="-5.5"/>
   <arg name="init_y" default="5.5"/>
   <arg name="init_z" default="0.4"/>
 
   <!-- body topic -->
-  <arg name="body_pose_topic" value="$(eval '/LIO/odom_vehicle' if arg('is_real_world') else '/quad_0/body_pose')" />
+  <arg name="body_pose_topic" default="$(eval '/LIO/odom_vehicle' if arg('is_real_world') else '/quad_0/body_pose')" />
+  <arg name="sensor_pose_topic" default="$(eval '/LIO/odom_imu' if arg('is_real_world') else ('/quad_0/camera_pose' if arg('sensor_type') == 'depth' else '/quad_0/lidar_pose'))" />
+  <arg name="cloud_topic" default="$(eval '/LIO/clouds_lidar' if arg('is_real_world') else '/pcl_render_node/cloud')" />
+  <arg name="cloud_is_world" default="$(eval 'false' if arg('is_real_world') else 'true')" />
+  <arg name="depth_topic" default="$(eval '/camera/aligned_depth_to_color/image_raw' if arg('is_real_world') else '/pcl_render_node/depth')" />
   <param name="body_pose_topic" value="$(arg body_pose_topic)" type="str"/>
 
   <!-- main algorithm params -->
@@ -33,14 +39,14 @@
     <!-- sensor choose -->
     <arg name="sensor_type" value="$(arg sensor_type)"/>
     <arg name="body_pose_topic" value="$(arg body_pose_topic)" />
-    <arg name="sensor_pose_topic" value="$(eval '/LIO/odom_imu' if arg('is_real_world') else ('/quad_0/camera_pose' if arg('sensor_type') == 'depth' else '/quad_0/lidar_pose'))" />
+    <arg name="sensor_pose_topic" value="$(arg sensor_pose_topic)" />
     
     <!-- lidar topic -->
-    <arg name="cloud_topic" value="$(eval '/LIO/clouds_lidar' if arg('is_real_world') else '/pcl_render_node/cloud')"/>
-    <arg name="cloud_is_world" value="$(eval 'false' if arg('is_real_world') else 'true')"/>
+    <arg name="cloud_topic" value="$(arg cloud_topic)"/>
+    <arg name="cloud_is_world" value="$(arg cloud_is_world)"/>
     
     <!-- depth topic -->
-    <arg name="depth_topic" value="$(eval '/camera/aligned_depth_to_color/image_raw' if arg('is_real_world') else '/pcl_render_node/depth')"/>
+    <arg name="depth_topic" value="$(arg depth_topic)"/>
     <arg name="cx" value="$(eval 317.19183349609375 if arg('is_real_world') else 321.04638671875)"/>
     <arg name="cy" value="$(eval 256.4806823730469 if arg('is_real_world') else 243.44969177246094)"/>
     <arg name="fx" value="$(eval 609.5884399414062 if arg('is_real_world') else 387.229248046875)"/>
@@ -54,6 +60,7 @@
     <arg name="reference_path_min_distance" value="$(arg reference_path_min_distance)" />
     <arg name="reference_path_simplify_tolerance" value="$(arg reference_path_simplify_tolerance)" />
     <arg name="reference_path_mode" value="$(arg reference_path_mode)" />
+    <arg name="body_height" value="$(arg body_height)" />
   </include>
 
   <!-- controller mode -->
@@ -64,16 +71,18 @@
   <node if="$(eval arg('controller_mode') == 'open_loop')" pkg="scan_planner" name="open_loop_controller" type="open_loop_controller" output="screen"/>
   <group if="$(eval arg('controller_mode') == 'closed_loop')">
     <node pkg="scan_planner" name="closed_loop_controller" type="closed_loop_controller" output="screen"/>
-    <node unless="$(arg is_real_world)" pkg="scan_planner" name="go2_kinematic_sim" type="go2_kinematic_sim" output="screen"/>
+    <node unless="$(eval arg('is_real_world') or arg('use_external_simulator'))" pkg="scan_planner" name="go2_kinematic_sim" type="go2_kinematic_sim" output="screen"/>
   </group>
 
   <!-- go2 model -->
-  <param name="robot_description" textfile="$(find go2_description)/urdf/go2_description.urdf" />
-  <node pkg="robot_state_publisher" type="robot_state_publisher" name="go2_robot_state_publisher" output="screen"/>
-  <node pkg="scan_planner" name="go2_gait_publisher" type="go2_gait_publisher" output="screen"/>
+  <group unless="$(arg use_external_simulator)">
+    <param name="robot_description" textfile="$(find go2_description)/urdf/go2_description.urdf" />
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="go2_robot_state_publisher" output="screen"/>
+    <node pkg="scan_planner" name="go2_gait_publisher" type="go2_gait_publisher" output="screen"/>
+  </group>
 
   <!-- use simulator -->
-  <include file="$(find scan_planner)/launch/simulator.xml">
+  <include unless="$(arg use_external_simulator)" file="$(find scan_planner)/launch/simulator.xml">
     <arg name="is_real_world" value="$(arg is_real_world)" />
     <arg name="navi_mode" value="$(arg navi_mode)" />
     <arg name="sensor_type" value="$(arg sensor_type)" />

@@ -46,11 +46,6 @@ void GridMap::initMap(ros::NodeHandle &nh)
     pct_traversability_.cost_threshold = public_cost_threshold;
   }
   node_.param("pct_traversability/max_height_error", pct_traversability_.max_height_error, 0.20);
-<<<<<<< HEAD
-=======
-  node_.param("pct_traversability/unknown_as_obstacle",
-              pct_traversability_.unknown_as_obstacle, true);
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   node_.param("pct_traversability/debug_rejection_stats",
               pct_traversability_.debug_rejection_stats, false);
   string support_model;
@@ -482,11 +477,7 @@ bool GridMap::projectPctBodyHeight(const Eigen::Vector3d& reference_pos,
   const double expected_ground_z = reference_pos.z() - traversability_profile_.body_height;
   const PctTerrainMap::QueryStatus query_status = map->queryTraversableLayer(
       reference_pos.x(), reference_pos.y(), expected_ground_z,
-<<<<<<< HEAD
       pct_traversability_.max_height_error, pct_traversability_.cost_threshold, cell);
-=======
-      std::numeric_limits<double>::infinity(), pct_traversability_.cost_threshold, cell);
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   if (status)
     *status = query_status;
   if (query_status != PctTerrainMap::QueryStatus::kFree)
@@ -511,15 +502,9 @@ bool GridMap::isPctPointTraversable(Eigen::Vector3d pos,
   {
     if (query_status)
       *query_status = PctTerrainMap::QueryStatus::kInvalidMap;
-<<<<<<< HEAD
     ROS_WARN_THROTTLE(1.0,
                       "[GridMap] PCT map unavailable; fall back to inflated SCAN occupancy.");
     return true;
-=======
-    if (pct_traversability_.debug_rejection_stats)
-      ROS_DEBUG_THROTTLE(1.0, "[GridMap] PCT rejection: map unavailable");
-    return !pct_traversability_.unknown_as_obstacle;
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   }
   const double expected_ground_z = pos(2) - traversability_profile_.body_height;
   PctTerrainMap::Cell cell;
@@ -530,7 +515,6 @@ bool GridMap::isPctPointTraversable(Eigen::Vector3d pos,
     *query_status = status;
   if (status != PctTerrainMap::QueryStatus::kFree)
   {
-<<<<<<< HEAD
     const bool unknown = status == PctTerrainMap::QueryStatus::kInvalidMap ||
                          status == PctTerrainMap::QueryStatus::kOutOfMap ||
                          status == PctTerrainMap::QueryStatus::kNoElevation;
@@ -543,15 +527,6 @@ bool GridMap::isPctPointTraversable(Eigen::Vector3d pos,
       ROS_DEBUG_THROTTLE(1.0, "[GridMap] PCT rejection: %s",
                          PctTerrainMap::queryStatusName(status));
     return false;
-=======
-    if (pct_traversability_.debug_rejection_stats)
-      ROS_DEBUG_THROTTLE(1.0, "[GridMap] PCT rejection: %s",
-                         PctTerrainMap::queryStatusName(status));
-    const bool unknown = status == PctTerrainMap::QueryStatus::kInvalidMap ||
-                         status == PctTerrainMap::QueryStatus::kOutOfMap ||
-                         status == PctTerrainMap::QueryStatus::kNoElevation;
-    return unknown && !pct_traversability_.unknown_as_obstacle;
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e
   }
   return true;
 }

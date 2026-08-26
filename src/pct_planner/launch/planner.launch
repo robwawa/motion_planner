@@ -4,6 +4,7 @@
        global planner cannot silently use a tomogram from a different PCD. -->
   <arg name="tomogram_name" default="building2_9" />
   <arg name="optimize_path" default="true" doc="Publish optimized trajectory when true; raw A* path when false" />
+  <arg name="body_height" default="0.4" doc="Robot base height above the traversable surface (m)" />
   <arg name="endpoint_snap_radius" default="1.5" doc="Maximum XY search radius (m) when projecting endpoints to traversable cells" />
 
   <rosparam command="load" file="$(find pct_planner)/config/pct_profile.yaml"
@@ -13,7 +14,7 @@
         name="pct_planner" output="screen"
         args="--tomogram-name $(arg tomogram_name)">
     <param name="navigation_frame" value="map" />
-    <param name="body_height" value="0.4" />
+    <param name="body_height" value="$(arg body_height)" />
     <param name="layer_height_tolerance" value="0.75" />
     <param name="endpoint_snap_radius" value="$(arg endpoint_snap_radius)" />
     <param name="optimize_path" value="$(arg optimize_path)" />

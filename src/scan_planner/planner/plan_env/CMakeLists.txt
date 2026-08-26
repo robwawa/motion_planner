@@ -51,7 +51,6 @@ target_link_libraries( plan_env
     ${PCL_LIBRARIES}
     )  
 add_dependencies(plan_env ${catkin_EXPORTED_TARGETS} ${pct_planner_EXPORTED_TARGETS})
-<<<<<<< HEAD
 
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(pct_terrain_map_test test/pct_terrain_map_test.cpp)
@@ -60,5 +59,3 @@ if(CATKIN_ENABLE_TESTING)
     add_dependencies(pct_terrain_map_test ${catkin_EXPORTED_TARGETS} ${pct_planner_EXPORTED_TARGETS})
   endif()
 endif()
-=======
->>>>>>> 3126b02728e9b87d46c063e3ba994bee4f6f013e

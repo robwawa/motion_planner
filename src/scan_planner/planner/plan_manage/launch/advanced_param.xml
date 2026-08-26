@@ -18,8 +18,9 @@
   <arg name="reference_path_mode" default="min_snap_single_pass"/>
   <arg name="navigation_frame" default="map"/>
   <arg name="use_scan_support" default="false"/>
-  <arg name="use_pct_traversability" default="true"/>
+  <arg name="use_pct_traversability" default="false"/>
   <arg name="pct_terrain_map_topic" default="/pct/terrain_map"/>
+  <arg name="body_height" default="0.4"/>
 
   <!-- public parameters -->
   <arg name="max_vel" default="0.75"/>
@@ -78,7 +79,7 @@
     <!-- 向上膨胀 -->
     <param name="grid_map/obstacles_inflation_z_up" value="0.0" />  
     <param name="grid_map/obstacles_inflation_z_down" value="0.0" />
-    <param name="grid_map/body_height" value="0.4" />
+    <param name="grid_map/body_height" value="$(arg body_height)" />
 
     <!-- Optional PCT tomogram constraint for terrain-aware planning. -->
     <param name="terrain_check/use_scan_support" value="$(arg use_scan_support)" type="bool" />
@@ -90,7 +91,7 @@
     <!-- 地面支撑约束：SCAN 显式启用，其他机器人可在各自配置中关闭或替换足迹。 -->
     <param name="grid_map/traversability_enabled" value="false" />
     <param name="grid_map/support_model" value="double_cylinder" />
-    <param name="grid_map/support_body_height" value="0.4" />
+    <param name="grid_map/support_body_height" value="$(arg body_height)" />
     <param name="grid_map/support_max_drop" value="0.15" />
     <param name="grid_map/support_height_tolerance_up" value="0.15" />
     <param name="grid_map/support_max_height_difference" value="0.35" />
