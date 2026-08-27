@@ -33,6 +33,7 @@ namespace scan_planner
                        const ReferencePathZProfile *z_reference_profile = nullptr,
                        double z_reference_start_progress = 0.0,
                        double z_projection_tolerance = 0.0);
+    bool planBrakingTraj(double current_time, double brake_acceleration);
     bool EmergencyStop(Eigen::Vector3d stop_pos);
     bool planGlobalTraj(const Eigen::Vector3d &start_pos, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
                         const Eigen::Vector3d &end_pos, const Eigen::Vector3d &end_vel, const Eigen::Vector3d &end_acc);

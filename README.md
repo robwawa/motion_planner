@@ -46,6 +46,15 @@ roslaunch scan_planner run.launch \
   use_gpu:=false
 ```
 
+将 `controller_mode` 改为 `mpc` 可启用 acados MPC 控制器：
+
+```bash
+roslaunch scan_planner run.launch controller_mode:=mpc
+```
+
+MPC 的模型、权重、约束、acados 生成和故障处理说明见
+[`mpc_generated/README.md`](src/scan_planner/planner/plan_manage/mpc_generated/README.md)。
+
 RViz 可单独启动：
 
 ```bash

@@ -2,7 +2,9 @@
 /build/
 /devel/
 /install/
+/log/
 /logs/
+*.log
 
 # Generated ROS/CMake metadata
 *.pyc

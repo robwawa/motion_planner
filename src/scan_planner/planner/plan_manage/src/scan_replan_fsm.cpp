@@ -145,6 +145,11 @@ namespace scan_planner
     nh.param("fsm/adaptive_horizon_slope_gain", adaptive_horizon_slope_gain_, 1.0);
     nh.param("fsm/adaptive_horizon_slope_smoothing_window",
              adaptive_horizon_slope_smoothing_window_, 0.8);
+    nh.param("fsm/direction_change_brake_enabled", direction_change_brake_enabled_, true);
+    nh.param("fsm/direction_change_threshold_deg", direction_change_threshold_deg_, 120.0);
+    nh.param("fsm/direction_change_min_speed", direction_change_min_speed_, 0.1);
+    nh.param("fsm/direction_change_stop_speed", direction_change_stop_speed_, 0.1);
+    nh.param("fsm/direction_change_brake_acc_ratio", direction_change_brake_acc_ratio_, 0.5);
     nh.param("grid_map/frame_id", self_inflation_frame_id_, std::string("world"));
 
     if (reference_path_z_mode_ != "base" && reference_path_z_mode_ != "ground")
@@ -173,6 +178,14 @@ namespace scan_planner
         adaptive_horizon_slope_smoothing_window_ <= 0.0)
     {
       ROS_ERROR("[SCANReplanFSM] Invalid adaptive horizon parameters.");
+      ros::shutdown();
+      return;
+    }
+    if (direction_change_threshold_deg_ < 0.0 || direction_change_threshold_deg_ > 180.0 ||
+        direction_change_min_speed_ < 0.0 || direction_change_stop_speed_ < 0.0 ||
+        direction_change_brake_acc_ratio_ <= 0.0 || direction_change_brake_acc_ratio_ > 1.0)
+    {
+      ROS_ERROR("[SCANReplanFSM] Invalid direction-change brake parameters.");
       ros::shutdown();
       return;
     }
@@ -356,6 +369,9 @@ namespace scan_planner
     if (success)
       success = adjustGlobalTargetIfOccupied();
 
+    if (success)
+      updatePendingTargetDirection(odom_pos_, std::vector<Eigen::Vector3d>{end_pt_});
+
     visualization_->displayGoalPoint(end_pt_, Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, 0);
 
     if (success)
@@ -378,7 +394,7 @@ namespace scan_planner
       /*** FSM ***/
       if (exec_state_ == WAIT_TARGET)
         changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
-      else if (exec_state_ == EXEC_TRAJ)
+      else if (!startDirectionChangeBrake() && exec_state_ == EXEC_TRAJ)
         changeFSMExecState(REPLAN_TRAJ, "TRIG");
 
       // visualization_->displayGoalPoint(end_pt_, Eigen::Vector4d(1, 0, 0, 1), 0.3, 0);
@@ -649,12 +665,13 @@ namespace scan_planner
 
     if (success)
     {
+      updatePendingTargetDirection(odom_pos_, waypoints);
       /*** FSM ***/
       if (exec_state_ == WAIT_TARGET)
       {
         changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
       }
-      else if (exec_state_ == EXEC_TRAJ)
+      else if (!startDirectionChangeBrake() && exec_state_ == EXEC_TRAJ)
       {
         changeFSMExecState(REPLAN_TRAJ, "TRIG");
       }
@@ -773,6 +790,91 @@ namespace scan_planner
     self_inflation_pub_.publish(marker);
   }
 
+  void SCANReplanFSM::updatePendingTargetDirection(
+      const Eigen::Vector3d &start, const std::vector<Eigen::Vector3d> &points)
+  {
+    pending_target_direction_.setZero();
+    for (const Eigen::Vector3d &point : points)
+    {
+      const Eigen::Vector2d delta = (point - start).head<2>();
+      if (delta.norm() > 1e-3)
+      {
+        pending_target_direction_ = delta.normalized();
+        return;
+      }
+    }
+  }
+
+  bool SCANReplanFSM::shouldBrakeForDirectionChange()
+  {
+    if (!direction_change_brake_enabled_ || exec_state_ != EXEC_TRAJ ||
+        pending_target_direction_.norm() <= 1e-6)
+      return false;
+
+    LocalTrajData &info = planner_manager_->local_data_;
+    if (info.start_time_.toSec() < 1e-5 || info.duration_ <= 1e-5)
+      return false;
+
+    const double t_cur = std::min(std::max((ros::Time::now() - info.start_time_).toSec(), 0.0),
+                                  info.duration_);
+    const Eigen::Vector2d current_velocity =
+        info.velocity_traj_.evaluateDeBoorT(t_cur).head<2>();
+    if (current_velocity.norm() < direction_change_min_speed_)
+      return false;
+
+    const double dot = std::max(-1.0, std::min(1.0,
+        current_velocity.normalized().dot(pending_target_direction_)));
+    const double angle_deg = std::acos(dot) * 180.0 / std::acos(-1.0);
+    return angle_deg >= direction_change_threshold_deg_;
+  }
+
+  bool SCANReplanFSM::startDirectionChangeBrake()
+  {
+    if (!shouldBrakeForDirectionChange())
+      return false;
+
+    const LocalTrajData &info = planner_manager_->local_data_;
+    const double t_cur = std::min(std::max((ros::Time::now() - info.start_time_).toSec(), 0.0),
+                                  info.duration_);
+    const double brake_acceleration = direction_change_brake_acc_ratio_ * planner_manager_->pp_.max_acc_;
+    if (!planner_manager_->planBrakingTraj(t_cur, brake_acceleration))
+    {
+      ROS_WARN("[direction-change brake] Unable to generate braking trajectory; fall back to direct replan.");
+      return false;
+    }
+
+    auto braking_info = &planner_manager_->local_data_;
+    scan_planner::Bspline bspline;
+    bspline.order = 3;
+    bspline.start_time = braking_info->start_time_;
+    bspline.traj_id = braking_info->traj_id_;
+    const Eigen::MatrixXd pos_pts = braking_info->position_traj_.getControlPoint();
+    bspline.pos_pts.reserve(pos_pts.cols());
+    bspline.yaw_pts.reserve(pos_pts.cols());
+    for (int i = 0; i < pos_pts.cols(); ++i)
+    {
+      geometry_msgs::Point pt;
+      pt.x = pos_pts(0, i);
+      pt.y = pos_pts(1, i);
+      pt.z = pos_pts(2, i);
+      bspline.pos_pts.push_back(pt);
+      const int next = std::min(i + 1, static_cast<int>(pos_pts.cols()) - 1);
+      const Eigen::Vector2d diff = pos_pts.col(next).head<2>() - pos_pts.col(i).head<2>();
+      bspline.yaw_pts.push_back(diff.squaredNorm() > 1e-8 ? std::atan2(diff.y(), diff.x()) : getOdomYaw());
+    }
+    bspline.yaw_dt = 0.0;
+    const Eigen::VectorXd knots = braking_info->position_traj_.getKnot();
+    bspline.knots.reserve(knots.rows());
+    for (int i = 0; i < knots.rows(); ++i)
+      bspline.knots.push_back(knots(i));
+    bspline_pub_.publish(bspline);
+
+    ROS_INFO("[direction-change brake] Direction change exceeds %.1f deg; braking along active trajectory.",
+             direction_change_threshold_deg_);
+    changeFSMExecState(BRAKE_FOR_NEW_TARGET, "TARGET");
+    return true;
+  }
+
   void SCANReplanFSM::changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call)
   {
 
@@ -781,7 +883,7 @@ namespace scan_planner
     else
       continuously_called_times_ = 1;
 
-    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
+    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "BRAKE_FOR_NEW_TARGET", "EMERGENCY_STOP"};
     int pre_s = int(exec_state_);
     exec_state_ = new_state;
     cout << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
@@ -794,7 +896,7 @@ namespace scan_planner
 
   void SCANReplanFSM::printFSMExecState()
   {
-    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
+    static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "BRAKE_FOR_NEW_TARGET", "EMERGENCY_STOP"};
 
     cout << "[FSM]: state: " + state_str[int(exec_state_)] << endl;
   }
@@ -966,6 +1068,16 @@ namespace scan_planner
       else
       {
         changeFSMExecState(REPLAN_TRAJ, "FSM");
+      }
+      break;
+    }
+
+    case BRAKE_FOR_NEW_TARGET:
+    {
+      if (odom_vel_.head<2>().norm() <= direction_change_stop_speed_)
+      {
+        replan_fail_count_ = 0;
+        changeFSMExecState(GEN_NEW_TRAJ, "BRAKE_COMPLETE");
       }
       break;
     }
@@ -1147,6 +1259,14 @@ namespace scan_planner
       Eigen::Vector3d pos_next = info->position_traj_.evaluateDeBoorT(std::min(t + time_step, info->duration_));
       if (map->getPlanningOccupancy(pos, estimateYawFromSegment(pos, pos_next)))
       {
+        if (exec_state_ == BRAKE_FOR_NEW_TARGET)
+        {
+          ROS_WARN("[direction-change brake] Braking trajectory is in collision; emergency stop.");
+          flag_escape_emergency_ = true;
+          need_hover_stop_ = false;
+          changeFSMExecState(EMERGENCY_STOP, "SAFETY");
+          return;
+        }
         if (planFromCurrentTraj()) // Make a chance
         {
           changeFSMExecState(EXEC_TRAJ, "SAFETY");

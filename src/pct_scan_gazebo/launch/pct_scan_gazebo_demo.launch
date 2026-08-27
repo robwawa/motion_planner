@@ -5,7 +5,7 @@
   <arg name="launch_rviz" default="true" />
   <!-- A1's settled base height in this Gazebo model; 0.5 m is the old Go2 value. -->
   <arg name="body_height" default="0.315" />
-  <arg name="controller_mode" default="closed_loop" />
+  <arg name="controller_mode" default="mpc" />
   <arg name="optimize_path" default="true" />
   <arg name="reference_path_mode" default="polyline_rolling_window" />
   <arg name="tomogram_name" default="building2_9" />

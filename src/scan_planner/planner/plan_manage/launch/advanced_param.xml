@@ -18,7 +18,7 @@
   <arg name="reference_path_mode" default="min_snap_single_pass"/>
   <arg name="navigation_frame" default="map"/>
   <arg name="use_scan_support" default="false"/>
-  <arg name="use_pct_traversability" default="false"/>
+  <arg name="use_pct_traversability" default="true"/>
   <arg name="pct_terrain_map_topic" default="/pct/terrain_map"/>
   <arg name="body_height" default="0.4"/>
 
@@ -48,6 +48,12 @@
     <param name="fsm/emergency_time_" value="1.0" type="double"/>
     <param name="fsm/fail_safe" value="true" type="bool"/> 
     <param name="fsm/max_replan_fail_count" value="1000" type="int"/>
+    <!-- 新路线与当前运动方向大幅反向时，先沿现有局部轨迹缓停再重规划。 -->
+    <param name="fsm/direction_change_brake_enabled" value="true" type="bool"/>
+    <param name="fsm/direction_change_threshold_deg" value="120.0" type="double"/>
+    <param name="fsm/direction_change_min_speed" value="0.1" type="double"/>
+    <param name="fsm/direction_change_stop_speed" value="0.1" type="double"/>
+    <param name="fsm/direction_change_brake_acc_ratio" value="0.5" type="double"/>
     <param name="fsm/is_real_world" value="$(arg is_real_world)" type="bool"/>
     <param name="fsm/reference_path_topic" value="$(arg reference_path_topic)" type="str"/>
     <param name="fsm/reference_path_z_mode" value="$(arg reference_path_z_mode)" type="str"/>
@@ -150,5 +156,17 @@
   <param name="closed_loop_controller/max_vyaw" value="1.0" type="double"/>
   <param name="closed_loop_controller/finish_dist" value="0.15" type="double"/>
   <param name="closed_loop_controller/finish_yaw_tolerance" value="0.15" type="double"/>
+
+  <param name="mpc_controller/time_forward" value="0.8" type="double"/>
+  <param name="mpc_controller/heading_error_threshold" value="0.8" type="double"/>
+  <param name="mpc_controller/max_vx" value="$(arg max_vel)" type="double"/>
+  <param name="mpc_controller/max_vy" value="0.35" type="double"/>
+  <param name="mpc_controller/max_vyaw" value="1.0" type="double"/>
+  <param name="mpc_controller/q_pos" value="8.0" type="double"/>
+  <param name="mpc_controller/q_yaw" value="1.5" type="double"/>
+  <param name="mpc_controller/r_velocity" value="0.08" type="double"/>
+  <param name="mpc_controller/r_rate" value="0.4" type="double"/>
+  <param name="mpc_controller/solver_iterations" value="12" type="int"/>
+  <param name="mpc_controller/solver_timeout" value="0.008" type="double"/>
 
 </launch>

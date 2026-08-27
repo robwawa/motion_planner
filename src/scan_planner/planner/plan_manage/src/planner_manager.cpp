@@ -394,6 +394,73 @@ namespace scan_planner
     return true;
   }
 
+  bool SCANPlannerManager::planBrakingTraj(double current_time, double brake_acceleration)
+  {
+    if (local_data_.start_time_.toSec() < 1e-5 || local_data_.duration_ <= 1e-5 ||
+        brake_acceleration <= 1e-6)
+      return false;
+
+    const double t_cur = std::min(std::max(current_time, 0.0), local_data_.duration_);
+    const Eigen::Vector3d start_pos = local_data_.position_traj_.evaluateDeBoorT(t_cur);
+    const Eigen::Vector3d start_vel = local_data_.velocity_traj_.evaluateDeBoorT(t_cur);
+    const Eigen::Vector3d start_acc = local_data_.acceleration_traj_.evaluateDeBoorT(t_cur);
+    const double speed = start_vel.norm();
+    if (speed <= 1e-4)
+      return false;
+
+    // Preserve the active trajectory's geometry while bringing the vehicle to rest.
+    // The extra control-point spacing prevents a very short stop from becoming
+    // numerically ill-conditioned when the commanded speed is already low.
+    const double stopping_distance = speed * speed / (2.0 * brake_acceleration) + pp_.ctrl_pt_dist;
+    const double sample_dt = 0.02;
+    double travelled = 0.0;
+    double t_end = t_cur;
+    Eigen::Vector3d previous = start_pos;
+    for (double t = t_cur + sample_dt; t <= local_data_.duration_ + 1e-6; t += sample_dt)
+    {
+      const double sample_t = std::min(t, local_data_.duration_);
+      const Eigen::Vector3d point = local_data_.position_traj_.evaluateDeBoorT(sample_t);
+      travelled += (point - previous).norm();
+      previous = point;
+      t_end = sample_t;
+      if (travelled >= stopping_distance || sample_t >= local_data_.duration_ - 1e-6)
+        break;
+    }
+
+    if (t_end <= t_cur + 1e-4)
+      return false;
+
+    std::vector<Eigen::Vector3d> point_set;
+    const double stop_duration = std::max(speed / brake_acceleration, 0.2);
+    const int segments = std::max(4, static_cast<int>(std::ceil(stop_duration / 0.1)));
+    point_set.reserve(segments + 1);
+    for (int i = 0; i <= segments; ++i)
+    {
+      const double ratio = static_cast<double>(i) / segments;
+      point_set.push_back(local_data_.position_traj_.evaluateDeBoorT(t_cur + ratio * (t_end - t_cur)));
+    }
+
+    const double ts = stop_duration / segments;
+    std::vector<Eigen::Vector3d> derivatives;
+    derivatives.push_back(start_vel);
+    derivatives.push_back(Eigen::Vector3d::Zero());
+    derivatives.push_back(start_acc);
+    derivatives.push_back(Eigen::Vector3d::Zero());
+
+    Eigen::MatrixXd ctrl_pts;
+    UniformBspline::parameterizeToBspline(ts, point_set, derivatives, ctrl_pts);
+    UniformBspline braking_traj(ctrl_pts, 3, ts);
+    braking_traj.setPhysicalLimits(pp_.max_vel_, pp_.max_acc_, pp_.feasibility_tolerance_);
+    if (!checkDynamicFeasibility(braking_traj))
+    {
+      ROS_WARN("[direction-change brake] Generated braking trajectory is dynamically infeasible.");
+      return false;
+    }
+
+    updateTrajInfo(braking_traj, ros::Time::now());
+    return true;
+  }
+
   bool SCANPlannerManager::EmergencyStop(Eigen::Vector3d stop_pos)
   {
     Eigen::MatrixXd control_points(3, 6);

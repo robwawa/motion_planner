@@ -39,6 +39,7 @@ namespace scan_planner
       GEN_NEW_TRAJ,
       REPLAN_TRAJ,
       EXEC_TRAJ,
+      BRAKE_FOR_NEW_TARGET,
       EMERGENCY_STOP
     };
     enum NAVI_MODE
@@ -75,6 +76,11 @@ namespace scan_planner
     double adaptive_horizon_curvature_gain_;
     double adaptive_horizon_slope_gain_;
     double adaptive_horizon_slope_smoothing_window_;
+    bool direction_change_brake_enabled_;
+    double direction_change_threshold_deg_;
+    double direction_change_min_speed_;
+    double direction_change_stop_speed_;
+    double direction_change_brake_acc_ratio_;
     std::string self_inflation_frame_id_;
 
     /* planning data */
@@ -96,6 +102,7 @@ namespace scan_planner
     double final_yaw_{0.0};
     bool have_final_yaw_{false};
     Eigen::Vector3d local_target_pt_, local_target_vel_;                     // local target state
+    Eigen::Vector2d pending_target_direction_{Eigen::Vector2d::Zero()};
     std::vector<Eigen::Vector3d> active_waypoints_;
     ReferencePathZProfile reference_path_z_profile_;
     double reference_path_z_progress_{0.0};
@@ -114,6 +121,10 @@ namespace scan_planner
     bool callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj); // front-end and back-end method
     bool callEmergencyStop(Eigen::Vector3d stop_pos);                          // front-end and back-end method
     bool planFromCurrentTraj();
+    bool shouldBrakeForDirectionChange();
+    bool startDirectionChangeBrake();
+    void updatePendingTargetDirection(const Eigen::Vector3d &start,
+                                      const std::vector<Eigen::Vector3d> &points);
     void setStartStateFromOdomOrCurrentTraj();
 
     /* return value: std::pair< Times of the same state be continuously called, current continuously called state > */

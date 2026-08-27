@@ -85,6 +85,20 @@ Launch the algorithm in another terminal:
 source devel/setup.bash && roslaunch scan_planner run.launch
 ```
 
+### MPC Controller
+
+The default controller is `closed_loop`. To run the acados-based MPC controller:
+
+```bash
+source devel/setup.bash
+roslaunch scan_planner run.launch controller_mode:=mpc
+```
+
+MPC tracks the planar `(x, y, yaw)` trajectory and publishes the same `/cmd_vel`
+interface as the default controller. Its generated solver, model assumptions,
+regeneration procedure, and runtime failure handling are documented in
+[`planner/plan_manage/mpc_generated/README.md`](planner/plan_manage/mpc_generated/README.md).
+
 ## 🔧 Important Functions
 
 The main launch options are defined in [`run.launch`](src/planner/plan_manage/launch/run.launch):

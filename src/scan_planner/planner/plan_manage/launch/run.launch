@@ -69,8 +69,9 @@
   <arg name="controller_mode" default="closed_loop"/>
 
   <node if="$(eval arg('controller_mode') == 'open_loop')" pkg="scan_planner" name="open_loop_controller" type="open_loop_controller" output="screen"/>
-  <group if="$(eval arg('controller_mode') == 'closed_loop')">
-    <node pkg="scan_planner" name="closed_loop_controller" type="closed_loop_controller" output="screen"/>
+  <node if="$(eval arg('controller_mode') == 'mpc')" pkg="scan_planner" name="mpc_controller" type="mpc_controller" output="screen"/>
+  <group if="$(eval arg('controller_mode') == 'closed_loop' or arg('controller_mode') == 'mpc')">
+    <node if="$(eval arg('controller_mode') == 'closed_loop')" pkg="scan_planner" name="closed_loop_controller" type="closed_loop_controller" output="screen"/>
     <node unless="$(eval arg('is_real_world') or arg('use_external_simulator'))" pkg="scan_planner" name="go2_kinematic_sim" type="go2_kinematic_sim" output="screen"/>
   </group>
 
