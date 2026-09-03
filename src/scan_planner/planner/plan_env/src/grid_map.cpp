@@ -1,7 +1,6 @@
 #include "plan_env/grid_map.h"
 #include <cmath>
 #include <limits>
-#include <stdexcept>
 #include <string>
 #include <tf/transform_broadcaster.h>
 
@@ -36,15 +35,6 @@ void GridMap::initMap(ros::NodeHandle &nh)
   node_.param("terrain_check/use_pct_traversability", pct_traversability_.enabled, false);
   node_.param("pct_traversability/topic", pct_traversability_.topic, pct_traversability_.topic);
   node_.param("pct_traversability/cost_threshold", pct_traversability_.cost_threshold, 20.0);
-  // Prefer the public PCT profile when it is loaded.  The private parameter
-  // above remains as a backward-compatible fallback for standalone use.
-  double public_cost_threshold = 0.0;
-  if (node_.getParam("/pct/traversability/cost_threshold", public_cost_threshold))
-  {
-    if (public_cost_threshold < 0.0)
-      throw std::runtime_error("invalid public PCT cost threshold");
-    pct_traversability_.cost_threshold = public_cost_threshold;
-  }
   node_.param("pct_traversability/max_height_error", pct_traversability_.max_height_error, 0.20);
   node_.param("pct_traversability/debug_rejection_stats",
               pct_traversability_.debug_rejection_stats, false);

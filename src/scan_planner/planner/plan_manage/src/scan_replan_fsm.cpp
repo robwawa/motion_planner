@@ -117,6 +117,7 @@ namespace scan_planner
     go2_execution_frozen_ = false;
     flag_escape_emergency_ = true;
     need_hover_stop_ = false;
+    global_replan_after_local_failure_ = false;
     replan_fail_count_ = 0;
     last_freeze_update_time_ = ros::Time::now();
 
@@ -234,6 +235,10 @@ namespace scan_planner
     go2_execution_frozen_sub_ = nh.subscribe("/planning/go2_execution_frozen", 10, &SCANReplanFSM::go2ExecutionFrozenCallback, this);
 
     bspline_pub_ = nh.advertise<scan_planner::Bspline>("/planning/bspline", 10);
+    // This is an edge event, not a persistent blockage state.  It is emitted
+    // only after SCAN has exhausted its own local replanning budget and the
+    // robot has completed the emergency stop.
+    replan_pub_ = nh.advertise<std_msgs::Empty>("/scan/global_replan_request", 1, false);
     data_disp_pub_ = nh.advertise<scan_planner::DataDisp>("/planning/data_display", 100);
     self_inflation_pub_ = nh.advertise<visualization_msgs::Marker>("self_inflation", 10, true);
     global_reference_path_pub_ = nh.advertise<nav_msgs::Path>("/planning/global_reference_path", 1, true);
@@ -1093,12 +1098,18 @@ namespace scan_planner
       {
         if (enable_fail_safe_ && !need_hover_stop_ && odom_vel_.norm() < 0.1)
           changeFSMExecState(GEN_NEW_TRAJ, "FSM");
-        else if (enable_fail_safe_ && need_hover_stop_ && odom_vel_.norm() < 0.1)
+        else if (need_hover_stop_ && odom_vel_.norm() < 0.1)
         {
           ROS_INFO("Exiting EMERGENCY_STOP. Switching to WAIT_TARGET. Need a new target point.");
           need_hover_stop_ = false;
           have_target_ = false;
           trigger_ = false;
+          if (global_replan_after_local_failure_)
+          {
+            global_replan_after_local_failure_ = false;
+            replan_pub_.publish(std_msgs::Empty());
+            ROS_WARN("[reference path] Local replanning budget exhausted; requesting PCT global replan.");
+          }
           changeFSMExecState(WAIT_TARGET, "EMERGENCY_EXIT");
         }
       }
@@ -1118,9 +1129,11 @@ namespace scan_planner
   {
     if (replan_fail_count_ >= max_replan_fail_count_)
     {
+      const bool request_global_replan = navi_mode_ == NAVI_MODE::REFERENCE_PATH;
       ROS_WARN("Replan failed %d times. Emergency stop and wait for a new target.", replan_fail_count_);
       replan_fail_count_ = 0;
       need_hover_stop_ = true;
+      global_replan_after_local_failure_ = request_global_replan;
       flag_escape_emergency_ = true;
       changeFSMExecState(EMERGENCY_STOP, "finishProcess");
     }

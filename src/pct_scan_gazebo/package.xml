@@ -10,6 +10,7 @@
   <depend>controller_interface</depend>
   <depend>controller_manager</depend>
   <depend>control_toolbox</depend>
+  <exec_depend>dynamic_perception_3d</exec_depend>
   <depend>gazebo_ros</depend>
   <depend>gazebo_msgs</depend>
   <depend>geometry_msgs</depend>

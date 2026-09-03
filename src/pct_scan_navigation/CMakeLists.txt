@@ -16,9 +16,14 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package()
 
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_nosetests(test)
+endif()
+
 catkin_install_python(PROGRAMS
   scripts/navigation_manager.py
   scripts/goal_interactive_marker.py
+  scripts/replan_cycle_budget.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

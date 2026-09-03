@@ -1,0 +1,10 @@
+<launch>
+  <arg name="static_pcd_file"
+       default="$(find pct_planner)/rsc/pcd/building2_9.pcd" />
+
+  <include file="$(find dynamic_perception_3d)/launch/dynamic_perception.launch">
+    <arg name="static_pcd_file" value="$(arg static_pcd_file)" />
+    <arg name="scenario_config_file"
+         value="$(find dynamic_perception_3d)/config/dynamic_perception_gazebo.yaml" />
+  </include>
+</launch>

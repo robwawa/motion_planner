@@ -47,7 +47,7 @@
     <param name="fsm/planning_horizon" value="$(arg planning_horizon)" type="double"/>
     <param name="fsm/emergency_time_" value="1.0" type="double"/>
     <param name="fsm/fail_safe" value="true" type="bool"/> 
-    <param name="fsm/max_replan_fail_count" value="1000" type="int"/>
+    <param name="fsm/max_replan_fail_count" value="10" type="int"/>
     <!-- 新路线与当前运动方向大幅反向时，先沿现有局部轨迹缓停再重规划。 -->
     <param name="fsm/direction_change_brake_enabled" value="true" type="bool"/>
     <param name="fsm/direction_change_threshold_deg" value="120.0" type="double"/>
@@ -91,6 +91,7 @@
     <param name="terrain_check/use_scan_support" value="$(arg use_scan_support)" type="bool" />
     <param name="terrain_check/use_pct_traversability" value="$(arg use_pct_traversability)" type="bool" />
     <param name="pct_traversability/topic" value="$(arg pct_terrain_map_topic)" type="str" />
+    <param name="pct_traversability/cost_threshold" value="60" type="double" />
     <param name="pct_traversability/max_height_error" value="0.40" type="double" />
     <param name="pct_traversability/debug_rejection_stats" value="true" type="bool" />
 

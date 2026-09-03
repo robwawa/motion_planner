@@ -1,5 +1,11 @@
 # motion_planner ROS 工作空间
 
+集成的 PCT-SCAN demo 支持可选的全局动态重规划：`dynamic_perception_3d`
+负责从实时 LiDAR 提取世界坐标动态障碍，PCT 仅将其快照投影到静态多层
+tomogram；路径走廊持续受阻时重新选择全局拓扑，并在发布前使用同一动态快照
+复检 GPMP 结果；SCAN 继续负责局部轨迹生成和即时碰撞规避。
+运行参数与内存上限见 `src/pct_planner/config/pct_planner.yaml`。
+
 该工作空间同时包含：
 
 - `pct_planner`：PCT 全局规划与三维层析节点；

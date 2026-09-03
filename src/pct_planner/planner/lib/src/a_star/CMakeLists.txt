@@ -13,4 +13,10 @@ if(BUILD_TESTING)
   )
   target_link_libraries(a_star_reset_regression_test PRIVATE a_star_search)
   add_test(NAME a_star_reset_regression COMMAND a_star_reset_regression_test)
+
+  add_executable(a_star_dynamic_cost_test
+    test_dynamic_cost_search.cc
+  )
+  target_link_libraries(a_star_dynamic_cost_test PRIVATE a_star_search)
+  add_test(NAME a_star_dynamic_cost_search COMMAND a_star_dynamic_cost_test)
 endif()

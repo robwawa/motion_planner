@@ -8,6 +8,7 @@ import rospy
 import sensor_msgs.point_cloud2 as pc2
 import tf
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import PointCloud, PointCloud2
 
 
@@ -24,8 +25,10 @@ class PointCloudBridge:
         self.sensor_frame = rospy.get_param("~sensor_frame", "laser_livox")
         odom_topic = rospy.get_param("~odom_topic", "/Odometry_gazebo")
         cloud_topic = rospy.get_param("~cloud_topic", "/livox/Pointcloud2")
+        sensor_pose_topic = rospy.get_param("~sensor_pose_topic", "/pct/livox_sensor_pose")
         raw_cloud_topic = rospy.get_param("~raw_cloud_topic", "/scan")
         self.publisher = rospy.Publisher(cloud_topic, PointCloud2, queue_size=2)
+        self.sensor_pose_publisher = rospy.Publisher(sensor_pose_topic, PoseStamped, queue_size=2)
         rospy.Subscriber(odom_topic, Odometry, self.odom_callback, queue_size=5)
         rospy.Subscriber(raw_cloud_topic, PointCloud, self.cloud_callback, queue_size=2)
         rospy.loginfo("Mid360 bridge: %s -> %s (%s)", raw_cloud_topic, cloud_topic, self.map_frame)
@@ -64,10 +67,21 @@ class PointCloudBridge:
 
         pose = odom.pose.pose
         points = (self.rotation_matrix(pose.orientation) @ points.T).T
-        points += np.asarray([pose.position.x, pose.position.y, pose.position.z])
+        body_translation = np.asarray([pose.position.x, pose.position.y, pose.position.z])
+        points += body_translation
 
         header = message.header
         header.frame_id = self.map_frame
+        # Publish the exact optical origin used above with the same stamp as
+        # the cloud.  Static ray filtering must not infer it from a later odom.
+        sensor_pose = PoseStamped()
+        sensor_pose.header = header
+        sensor_origin = self.rotation_matrix(pose.orientation) @ np.asarray(translation)
+        sensor_pose.pose.position.x = float(sensor_origin[0] + body_translation[0])
+        sensor_pose.pose.position.y = float(sensor_origin[1] + body_translation[1])
+        sensor_pose.pose.position.z = float(sensor_origin[2] + body_translation[2])
+        sensor_pose.pose.orientation = pose.orientation
+        self.sensor_pose_publisher.publish(sensor_pose)
         self.publisher.publish(pc2.create_cloud_xyz32(header, points.tolist()))
 
 

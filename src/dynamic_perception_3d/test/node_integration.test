@@ -1,0 +1,37 @@
+<launch>
+  <node pkg="tf" type="static_transform_publisher" name="map_to_base"
+        args="0 0 0 0 0 0 map base 100" />
+  <node pkg="tf" type="static_transform_publisher" name="base_to_lidar"
+        args="1 0 0 0 0 0 base laser_livox 100" />
+
+  <node pkg="dynamic_perception_3d" type="dynamic_perception_3d_node"
+        name="dynamic_perception_3d" output="screen">
+    <param name="static_pcd_file"
+           value="$(find dynamic_perception_3d)/test/data/synthetic_static_map.pcd" />
+    <param name="map_frame" value="map" />
+    <param name="base_frame" value="base" />
+    <param name="sensor_frame" value="laser_livox" />
+    <param name="lidar_topic" value="/test/lidar" />
+    <param name="voxel_leaf_size" value="0.01" />
+    <param name="obstacle_voxel_size" value="0.01" />
+    <param name="static_match_radius" value="0.05" />
+    <param name="static_recheck_radius" value="0.10" />
+    <param name="static_cluster_ratio" value="0.7" />
+    <param name="min_range" value="0.1" />
+    <param name="max_range" value="10.0" />
+    <param name="vertical_fov_bottom" value="-90.0" />
+    <param name="vertical_fov_top" value="90.0" />
+    <param name="self_filter_radius" value="0.0" />
+    <param name="cluster_tolerance" value="0.15" />
+    <param name="cluster_min_size" value="3" />
+    <param name="min_clearing_scan_points" value="3" />
+    <param name="confirm_hits" value="2" />
+    <param name="history_window_min_height" value="-0.25" />
+    <param name="history_window_max_height" value="1.25" />
+    <param name="publish_debug" value="true" />
+  </node>
+
+  <test test-name="dynamic_perception_3d_node_integration"
+        pkg="dynamic_perception_3d" type="node_integration_test.py"
+        time-limit="20" />
+</launch>

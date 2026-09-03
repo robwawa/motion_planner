@@ -1,0 +1,97 @@
+# PCT 统一参数配置。顶层键对应各 PCT 节点的 ROS 命名空间。
+pct:
+  map:
+    # 地图栅格分辨率，单位：米/格。
+    resolution: 0.10
+    # 地面基准高度，单位：米。
+    ground_h: 0.0
+    # 高程图的垂直切片间隔，单位：米。
+    slice_dh: 0.5
+  traversability:
+    # 局部可通行性计算使用的平面核尺寸，单位：栅格。
+    kernel_size: 7
+    # 高程区间的最小有效高度，单位：米。
+    interval_min: 0.50
+    # 判定区间为空闲区域的最小比例。
+    interval_free: 0.50
+    # 允许的最大坡度。
+    slope_max: 0.40
+    # 允许跨越的最大台阶高度，单位：米。
+    step_max: 0.30
+    # 栅格被判定为可站立区域所需的有效点比例。
+    standable_ratio: 0.50
+    # 不可通行区域的代价屏障值。
+    cost_barrier: 50.0
+    # 可通行性评估使用的安全边界，单位：米。
+    safe_margin: 0.5
+    # 静态地图障碍物的膨胀距离，单位：米。
+    inflation: 0.1
+    # PCT 认为栅格可通行的最大代价阈值。
+    cost_threshold: 49.0
+
+pointcloud_tomography:
+  # 地图坐标系名称，点云和输出图层均使用该坐标系。
+  map_frame: map
+  # 用于生成 tomography 的输入点云话题。
+  pointcloud_topic: /global_points
+  # 高程图层 G 的输出话题前缀，后接切片编号。
+  layer_G_topic: /layer_G_
+  # 代价图层 C 的输出话题前缀，后接切片编号。
+  layer_C_topic: /layer_C_
+  # tomography 汇总结果输出话题。
+  tomogram_topic: /tomogram
+  # 地形地图输出话题。
+  terrain_map_topic: /pct/terrain_map
+  # tomography 缓存文件的输出目录。
+  export_dir: rsc/tomogram/
+
+pct_planner:
+  # 全局规划使用的地图坐标系。
+  navigation_frame: map
+  # 机器人机体基准高度，单位：米；不同场景可由 launch 覆盖。
+  body_height: 0.4
+  # 规划起点/终点允许匹配的垂直层高度误差，单位：米。
+  layer_height_tolerance: 0.75
+  # 是否对 A* 路径执行轨迹优化。
+  optimize_path: true
+  # 起点和终点投影到可通行栅格时的最大搜索半径，单位：米。
+  endpoint_snap_radius: 1.5
+  # 等待 tomography 文件生成的最长时间，单位：秒。
+  wait_timeout: 300.0
+  dynamic_replan:
+    # 是否启用动态障碍物代价图层。
+    enabled: true
+    # 动态感知输出的障碍物点云话题。
+    cloud_topic: /dynamic_perception/dynamic_cloud
+    # 动态感知输入是否健康的话题。
+    health_topic: /dynamic_perception/scan_healthy
+    # 动态感知源超时判定时间，单位：秒。
+    dynamic_source_timeout: 0.5
+    # 动态图层更新频率，单位：Hz。
+    update_rate: 10.0
+    # 动态调试点云和代价图发布频率，单位：Hz。
+    debug_publish_rate: 1.0
+    # 单次动态点云快照允许处理的最大点数。
+    max_points_per_snapshot: 200000
+    # 动态点云分块投影时每个分块的最大点数。
+    assignment_chunk_size: 20000
+    # 调试输出允许发布的最大点数。
+    max_debug_points: 100000
+    # 低于该高度的点视为地面并忽略，单位：米。
+    terrain_ignore_height: 0.08
+    # 动态点投影到高程层时允许的高度误差，单位：米。
+    layer_height_tolerance: 0.25
+    # 机器人碰撞模型半径，单位：米。
+    robot_radius: 0.32
+    # 碰撞检测额外安全边界，单位：米。
+    safety_margin: 0.15
+    # 动态障碍物栅格的膨胀半径，单位：米。
+    inflation_radius: 0.50
+    # 机体高度以上的动态碰撞检测余量，单位：米。
+    collision_top_margin: 0.20
+    # 动态障碍物的致命代价值。
+    lethal_cost: 100
+    # 动态图层允许使用的最大内存，单位：MiB。
+    max_dynamic_memory_mb: 128.0
+    # 动态图层更新期间最多重试的快照次数。
+    max_snapshot_retries: 1

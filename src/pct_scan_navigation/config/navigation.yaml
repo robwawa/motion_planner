@@ -1,8 +1,27 @@
+# 导航、目标交互和全局重规划使用的坐标系。
 navigation_frame: map
+# 机器人机体位姿输入话题。
 body_pose_topic: /quad_0/body_pose
+# 用户目标位姿输入话题。
 goal_topic: /goal_pose_3d
+# PCT/SCAN 规划参考路径输出话题。
 reference_path_topic: /navigation/reference_path
+# 经过校验后的目标位姿输出话题。
 validated_goal_topic: /navigation/validated_goal
+# 导航状态输出话题。
 status_topic: /navigation/status
+# 起点距离可通行区域的最大允许距离，单位：米。
 max_start_distance: 1.0
+# 等待 PCT Action 服务的超时时间，单位：秒。
 action_wait_timeout: 15.0
+# 请求 SCAN 执行全局重规划的话题。
+scan_replan_request_topic: /scan/global_replan_request
+# 判定目标到达的距离阈值，单位：米。
+goal_reached_distance: 0.5
+# 单次全局重规划允许的 Action 尝试次数。
+replan_max_attempts: 3
+# 连续重试之间的等待时间，单位：秒。
+replan_retry_delays: [2.0, 4.0]
+# 一个用户目标允许的最大 SCAN 到 PCT 全局重规划交接次数。
+# 该值独立于 replan_max_attempts，后者限制每次交接中的 Action 重试次数。
+global_replan_max_cycles: 3

@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iostream>
 #include <queue>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -64,6 +65,53 @@ step_cost_weight_  = step_cost_weight;
       max_x_, max_y_, max_layers_, duration.count() / 1000.0);
 }
 
+void Astar::SetDynamicCostMap(const uint8_t* costs, size_t count,
+                              uint8_t lethal_cost) {
+  const size_t expected = GetCellCount();
+  if (costs == nullptr && count != 0) {
+    throw std::invalid_argument("dynamic cost pointer is null");
+  }
+  if (count != expected) {
+    throw std::invalid_argument("dynamic cost map size does not match A* map");
+  }
+  if (lethal_cost <= cost_threshold_) {
+    throw std::invalid_argument(
+        "dynamic lethal cost must exceed the static cost threshold");
+  }
+  dynamic_cost_.assign(costs, costs + count);
+  dynamic_lethal_cost_ = lethal_cost;
+  dynamic_cost_enabled_ = true;
+}
+
+void Astar::ClearDynamicCostMap() {
+  dynamic_cost_.clear();
+  dynamic_cost_.shrink_to_fit();
+  dynamic_cost_enabled_ = false;
+}
+
+size_t Astar::DynamicFlatIndex(int layer, int row, int col) const {
+  return (static_cast<size_t>(layer) * max_y_ + row) * max_x_ + col;
+}
+
+uint8_t Astar::DynamicCost(int layer, int row, int col) const {
+  if (!dynamic_cost_enabled_) return 0;
+  return dynamic_cost_[DynamicFlatIndex(layer, row, col)];
+}
+
+std::vector<uint8_t> Astar::GetDynamicCosts(
+    const std::vector<size_t>& flat_indices) const {
+  std::vector<uint8_t> result;
+  result.reserve(flat_indices.size());
+  const size_t count = GetCellCount();
+  for (const size_t index : flat_indices) {
+    if (index >= count) {
+      throw std::out_of_range("dynamic cost query index is outside map");
+    }
+    result.push_back(dynamic_cost_enabled_ ? dynamic_cost_[index] : 0);
+  }
+  return result;
+}
+
 void Astar::Reset() {
   for (size_t i = 0; i < grid_map_.size(); ++i) {
     for (size_t j = 0; j < grid_map_[i].size(); ++j) {
@@ -91,6 +139,12 @@ bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
   auto goal_node = &grid_map_[goal[0]][goal[2]][goal[1]];
   start_node->g = 0.0;
 
+  const uint8_t goal_dynamic =
+      DynamicCost(goal_node->layer, goal_node->idx[1], goal_node->idx[2]);
+  if (dynamic_cost_enabled_ && goal_dynamic >= dynamic_lethal_cost_) {
+    printf("goal node is blocked by dynamic cost: %u\n", goal_dynamic);
+    return false;
+  }
   if (goal_node->cost > cost_threshold_) {
     printf("goal node is not reachable, cost: %f", goal_node->cost);
     return false;
@@ -146,7 +200,14 @@ bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
 
       auto neighbor_node = &grid_map_[layer][i][j];
 
-      if (neighbor_node->cost > cost_threshold_) {
+      const uint8_t dynamic_cost = DynamicCost(layer, i, j);
+      if (dynamic_cost_enabled_ && dynamic_cost >= dynamic_lethal_cost_) {
+        continue;
+      }
+      const double fused_cost =
+          std::max(neighbor_node->cost, static_cast<double>(dynamic_cost));
+
+      if (fused_cost > cost_threshold_) {
         if (abs(neighbor_node->ele) < 0.5) {
           continue;
         } else {
@@ -162,7 +223,7 @@ bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
       // }
 
       auto diff = neighbor_node->idx - current_node->idx;
-      double step_cost = step_cost_weight_ * neighbor_node->cost;
+      double step_cost = step_cost_weight_ * fused_cost;
       if (step_cost < 5) step_cost = 0.0;
       tentative_g =
           current_node->g +

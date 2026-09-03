@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "a_star/a_star_search.h"
 #include "common/data_types.h"
@@ -23,6 +26,16 @@ class OfflineElePlanner {
 
   bool Plan(const Eigen::Vector3i& start, const Eigen::Vector3i& goal,
             const bool optimize = true);
+
+  void SetDynamicCostMap(const uint8_t* costs, size_t count,
+                         uint8_t lethal_cost) {
+    path_finder_.SetDynamicCostMap(costs, count, lethal_cost);
+  }
+  void ClearDynamicCostMap() { path_finder_.ClearDynamicCostMap(); }
+  std::vector<uint8_t> GetDynamicCosts(
+      const std::vector<size_t>& flat_indices) const {
+    return path_finder_.GetDynamicCosts(flat_indices);
+  }
 
   void SetReferenceHeight(const double height) {
     trajectory_optimizer_wnoj_.SetReferenceHeight(height);

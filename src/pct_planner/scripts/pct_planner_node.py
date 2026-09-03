@@ -9,10 +9,14 @@ import sys
 import time
 
 import actionlib
+import numpy as np
 import rospy
 import rospkg
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
+from sensor_msgs.msg import PointCloud2, PointField
+import sensor_msgs.point_cloud2 as pc2
+from std_msgs.msg import Bool, Header, UInt64
 
 from pct_planner.msg import PlanPath3DAction, PlanPath3DFeedback, PlanPath3DResult
 
@@ -80,6 +84,30 @@ class PCTActionServer:
             rospy.loginfo_throttle(5.0, '[pct_planner] waiting for tomogram: %s', tomogram_path)
             time.sleep(0.2)
         self.planner.loadTomogram(self.tomogram_name)
+        self.dynamic_enabled = rospy.get_param('~dynamic_replan/enabled', False)
+        self.dynamic_layer = None
+        self.last_dynamic_snapshot_received = 0.0
+        self.dynamic_source_timeout = 0.5
+        self.dynamic_source_healthy = False
+        self.max_debug_points = int(rospy.get_param(
+            '~dynamic_replan/max_debug_points', 100000))
+        self.dynamic_ok_pub = rospy.Publisher(
+            '/pct/dynamic_layer_ok', Bool, latch=True, queue_size=1)
+        self.dynamic_version_pub = rospy.Publisher(
+            '/pct/dynamic_version', UInt64, latch=True, queue_size=1)
+        self.dynamic_cloud_pub = rospy.Publisher(
+            '/pct/dynamic_cloud', PointCloud2, queue_size=1)
+        self.dynamic_cost_pub = rospy.Publisher(
+            '/pct/dynamic_costmap', PointCloud2, queue_size=1)
+        if self.dynamic_enabled:
+            try:
+                self._init_dynamic_replan()
+            except (MemoryError, ValueError) as exc:
+                rospy.logerr('[pct_planner] dynamic replan disabled: %s', exc)
+                self.dynamic_enabled = False
+                self.dynamic_ok_pub.publish(Bool(data=False))
+        else:
+            self.dynamic_ok_pub.publish(Bool(data=True))
         self.endpoint_snap_radius_cells = max(
             0, int(math.ceil(float(endpoint_snap_radius) / self.planner.resolution)))
         self.server = actionlib.SimpleActionServer(
@@ -87,6 +115,131 @@ class PCTActionServer:
         self.server.start()
         rospy.loginfo('[pct_planner] ready: tomogram=%s frame=%s',
                       self.tomogram_name, navigation_frame)
+
+    def _init_dynamic_replan(self):
+        from dynamic_obstacle_layer import DynamicObstacleLayer
+
+        p = '~dynamic_replan/'
+        lethal = int(rospy.get_param(p + 'lethal_cost', 100))
+        collision_top = self.body_height + float(rospy.get_param(
+            p + 'collision_top_margin', 0.20))
+        self.dynamic_layer = DynamicObstacleLayer(
+            self.planner.trav, self.planner.elev_g, self.planner.elev_c,
+            self.planner.center, self.planner.resolution,
+            self.planner.traversable_cost_threshold,
+            lethal_cost=lethal,
+            terrain_ignore_height=rospy.get_param(p + 'terrain_ignore_height', 0.08),
+            collision_top=collision_top,
+            layer_height_tolerance=rospy.get_param(p + 'layer_height_tolerance', 0.25),
+            robot_radius=rospy.get_param(p + 'robot_radius', 0.32),
+            safety_margin=rospy.get_param(p + 'safety_margin', 0.15),
+            inflation_radius=rospy.get_param(p + 'inflation_radius', 0.50),
+            max_points_per_snapshot=rospy.get_param(
+                p + 'max_points_per_snapshot', 200000),
+            assignment_chunk_size=rospy.get_param(p + 'assignment_chunk_size', 20000),
+            max_dynamic_memory_mb=rospy.get_param(p + 'max_dynamic_memory_mb', 128.0))
+        self.max_snapshot_retries = max(0, int(rospy.get_param(
+            p + 'max_snapshot_retries', 1)))
+        self.dynamic_source_timeout = max(0.0, float(rospy.get_param(
+            p + 'dynamic_source_timeout', 0.5)))
+        cloud_topic = rospy.get_param(p + 'cloud_topic', '/dynamic_perception/dynamic_cloud')
+        health_topic = rospy.get_param(p + 'health_topic',
+                                       '/dynamic_perception/scan_healthy')
+        self.health_sub = rospy.Subscriber(health_topic, Bool, self._dynamic_health_cb,
+                                           queue_size=1)
+        self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self._dynamic_cloud_cb,
+                                          queue_size=1, buff_size=16 * 1024 * 1024)
+        update_rate = max(1.0, float(rospy.get_param(p + 'update_rate', 10.0)))
+        debug_rate = max(0.1, float(rospy.get_param(p + 'debug_publish_rate', 1.0)))
+        self.decay_timer = rospy.Timer(rospy.Duration(1.0 / update_rate), self._decay_cb)
+        self.debug_timer = rospy.Timer(rospy.Duration(1.0 / debug_rate), self._debug_cb)
+        self.dynamic_ok_pub.publish(Bool(data=False))
+        cells = int(np.prod(self.dynamic_layer.shape, dtype=np.int64))
+        rospy.loginfo(
+            '[pct_planner] dynamic layer enabled: shape=%s cells=%d state=%.2f MiB',
+            self.dynamic_layer.shape, cells, cells * 6.0 / (1024.0 * 1024.0))
+
+    def _dynamic_health_cb(self, msg):
+        self.dynamic_source_healthy = bool(msg.data)
+        if not self.dynamic_source_healthy:
+            self.last_dynamic_snapshot_received = 0.0
+            if self.dynamic_layer.clear():
+                self.dynamic_version_pub.publish(UInt64(data=self.dynamic_layer.version))
+            self.dynamic_ok_pub.publish(Bool(data=False))
+
+    @staticmethod
+    def _cloud_xyz_view(msg, max_points=None):
+        formats = {
+            PointField.INT8: 'i1', PointField.UINT8: 'u1',
+            PointField.INT16: 'i2', PointField.UINT16: 'u2',
+            PointField.INT32: 'i4', PointField.UINT32: 'u4',
+            PointField.FLOAT32: 'f4', PointField.FLOAT64: 'f8'}
+        fields = {field.name: field for field in msg.fields}
+        if any(name not in fields for name in ('x', 'y', 'z')):
+            raise ValueError('PointCloud2 has no x/y/z fields')
+        endian = '>' if msg.is_bigendian else '<'
+        dtype = np.dtype({
+            'names': ['x', 'y', 'z'],
+            'formats': [endian + formats[fields[name].datatype] for name in ('x', 'y', 'z')],
+            'offsets': [fields[name].offset for name in ('x', 'y', 'z')],
+            'itemsize': msg.point_step})
+        view = np.frombuffer(msg.data, dtype=dtype, count=msg.width * msg.height)
+        if max_points and len(view) > max_points:
+            view = view[::int(math.ceil(len(view) / float(max_points)))]
+        return np.column_stack((view['x'], view['y'], view['z'])).astype(np.float32, copy=False)
+
+    def _dynamic_cloud_cb(self, msg):
+        if not self.dynamic_source_healthy:
+            rospy.logwarn_throttle(
+                2.0, '[pct_planner] dynamic cloud ignored: perception source is unhealthy')
+            return
+        try:
+            if msg.header.frame_id != self.navigation_frame:
+                raise ValueError('dynamic cloud frame {} does not match {}'.format(
+                    msg.header.frame_id or '<empty>', self.navigation_frame))
+            points = self._cloud_xyz_view(msg, self.dynamic_layer.max_points_per_snapshot)
+            self.dynamic_layer.replace_snapshot(points)
+            self.last_dynamic_snapshot_received = time.monotonic()
+            self.dynamic_version_pub.publish(UInt64(data=self.dynamic_layer.version))
+            self.dynamic_ok_pub.publish(Bool(data=True))
+        except Exception as exc:
+            self.dynamic_ok_pub.publish(Bool(data=False))
+            rospy.logwarn_throttle(2.0, '[pct_planner] dynamic cloud rejected: %s', exc)
+
+    def _decay_cb(self, _event):
+        if (self.last_dynamic_snapshot_received and
+                time.monotonic() - self.last_dynamic_snapshot_received >
+                self.dynamic_source_timeout):
+            self.last_dynamic_snapshot_received = 0.0
+            self.dynamic_source_healthy = False
+            if self.dynamic_layer.clear():
+                self.dynamic_version_pub.publish(UInt64(data=self.dynamic_layer.version))
+            self.dynamic_ok_pub.publish(Bool(data=False))
+            rospy.logwarn_throttle(
+                2.0, '[pct_planner] dynamic perception source timed out; projection cleared')
+
+    def _debug_cb(self, _event):
+        header = Header(stamp=rospy.Time.now(), frame_id=self.navigation_frame)
+        if self.dynamic_cloud_pub.get_num_connections() > 0:
+            assigned = self.dynamic_layer.last_assigned_points
+            if len(assigned):
+                if len(assigned) > self.max_debug_points:
+                    assigned = assigned[::int(math.ceil(len(assigned) / self.max_debug_points))]
+                x, y = self.dynamic_layer.grid_to_world(
+                    assigned[:, 1].astype(np.int32), assigned[:, 2].astype(np.int32))
+                points = np.column_stack((x, y, assigned[:, 3])).astype(np.float32)
+            else:
+                points = np.empty((0, 3), dtype=np.float32)
+            self.dynamic_cloud_pub.publish(pc2.create_cloud_xyz32(header, points))
+        if self.dynamic_cost_pub.get_num_connections() > 0:
+            layers, rows, cols, costs = self.dynamic_layer.nonzero_cells(self.max_debug_points)
+            if len(rows):
+                x, y = self.dynamic_layer.grid_to_world(rows, cols)
+                z = self.planner.elev_g[layers, rows, cols] + 0.03
+                points = np.column_stack((x, y, z)).astype(np.float32)
+            else:
+                points = np.empty((0, 3), dtype=np.float32)
+            self.dynamic_cost_pub.publish(pc2.create_cloud_xyz32(header, points))
 
     def feedback(self, stage):
         self.server.publish_feedback(PlanPath3DFeedback(stage=stage))
@@ -145,6 +298,12 @@ class PCTActionServer:
             return
 
         try:
+            planning_version = 0
+            if self.dynamic_enabled:
+                with self.dynamic_layer.lock:
+                    dynamic_cost, planning_version = self.dynamic_layer.snapshot()
+                    self.planner.set_dynamic_cost_snapshot(
+                        dynamic_cost, planning_version, self.dynamic_layer.lethal_cost)
             self.feedback('snapping_endpoints')
             start = self.planner.snap_to_traversable(
                 (goal.start.pose.position.x, goal.start.pose.position.y, goal.start.pose.position.z),
@@ -178,9 +337,25 @@ class PCTActionServer:
                 goal_index[0], goal_index[1], goal_distance)
             self.feedback('planning')
             planning_start = time.monotonic()
-            trajectory = self.planner.plan(
-                start_position[:2], goal_position[:2], start_layer, goal_layer, self.body_height,
-                optimize_path=self.optimize_path)
+            trajectory = None
+            attempts = 1 + self.max_snapshot_retries if self.dynamic_enabled else 1
+            for attempt in range(attempts):
+                trajectory = self.planner.plan(
+                    start_position[:2], goal_position[:2], start_layer, goal_layer,
+                    self.body_height, optimize_path=self.optimize_path)
+                if not self.dynamic_enabled or self.dynamic_layer.version == planning_version:
+                    break
+                if attempt + 1 < attempts:
+                    with self.dynamic_layer.lock:
+                        dynamic_cost, planning_version = self.dynamic_layer.snapshot()
+                        self.planner.set_dynamic_cost_snapshot(
+                            dynamic_cost, planning_version, self.dynamic_layer.lethal_cost)
+                    rospy.loginfo('[pct_planner] dynamic layer changed during planning; retry version %d',
+                                  planning_version)
+            if self.dynamic_enabled and self.dynamic_layer.version != planning_version:
+                rospy.logwarn('[pct_planner] dynamic layer remained unstable after %d retries; '
+                              'reject stale path', self.max_snapshot_retries)
+                trajectory = None
             planning_elapsed_ms = (time.monotonic() - planning_start) * 1000.0
             if self.server.is_preempt_requested():
                 self.server.set_preempted(

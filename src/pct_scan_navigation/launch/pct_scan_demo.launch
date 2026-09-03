@@ -9,17 +9,21 @@
        default="building2_91" />
   <arg name="controller_mode" default="open_loop" doc="open_loop for 3D path playback; closed_loop for same-floor Twist control" />
   <arg name="use_gpu" default="false" />
-  <arg name="optimize_path" default="true" doc="PCT optimized path; set false for raw A* path" />
   <arg name="body_height" default="0.36"
        doc="Robot base height above the traversable surface (m)" />
   <arg name="reference_path_mode" default="polyline_rolling_window"
        doc="SCAN reference behavior: min_snap_single_pass or polyline_rolling_window" />
+  <arg name="enable_dynamic_perception" default="true" />
+  <arg name="dynamic_lidar_topic" default="/pcl_render_node/cloud" />
+  <arg name="dynamic_base_frame" default="base" />
+  <arg name="dynamic_sensor_frame" default="laser" />
 
-  <!-- PCT and SCAN consume the exact same static map coordinate system. -->
-  <include file="$(find pct_planner)/launch/planner.launch">
-    <arg name="optimize_path" value="$(arg optimize_path)" />
-    <arg name="tomogram_name" value="$(arg tomogram_name)" />
-    <arg name="body_height" value="$(arg body_height)" />
+  <!-- The renderer publishes world-frame geometry; PCT and perception use map. -->
+  <node pkg="tf" type="static_transform_publisher" name="map_to_world"
+        args="0 0 0 0 0 0 map world 40" />
+  <include if="$(arg enable_dynamic_perception)"
+           file="$(find dynamic_perception_3d)/launch/dynamic_perception.launch">
+    <arg name="static_pcd_file" value="$(arg pcd_map_file)" />
   </include>
 
   <!-- Publish the PCT tomogram and visualization layers in the same map frame
@@ -28,6 +32,13 @@
     <arg name="backend" value="cpu" />
     <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
     <arg name="tomogram_name" value="$(arg tomogram_name)" />
+  </include>
+
+  <!-- PCT starts after tomography has loaded the shared configuration, so its
+       scenario-specific height override remains effective. -->
+  <include file="$(find pct_planner)/launch/planner.launch">
+    <arg name="tomogram_name" value="$(arg tomogram_name)" />
+    <arg name="body_height" value="$(arg body_height)" />
   </include>
 
   <include file="$(find scan_planner)/launch/run.launch">
@@ -49,6 +60,5 @@
 
   <include file="$(find pct_scan_navigation)/launch/navigation.launch">
     <arg name="body_pose_topic" value="/quad_0/body_pose" />
-    <arg name="navigation_frame" value="map" />
   </include>
 </launch>

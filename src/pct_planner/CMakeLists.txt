@@ -32,6 +32,10 @@ generate_messages(
 
 catkin_package(CATKIN_DEPENDS actionlib actionlib_msgs geometry_msgs message_runtime nav_msgs rospy sensor_msgs std_msgs)
 
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_nosetests(test)
+endif()
+
 catkin_install_python(PROGRAMS
   scripts/pct_tomography_node.py
   scripts/pct_planner_node.py

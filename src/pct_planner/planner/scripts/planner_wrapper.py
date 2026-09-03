@@ -30,7 +30,12 @@ class TomogramPlanner(object):
         self.offset = None
         self.trav = None
         self.elev_g = None
+        self.elev_c = None
         self.traversable_cost_threshold = 20.0
+        self.dynamic_cost = None
+        self.dynamic_version = 0
+        self.dynamic_lethal_cost = 100
+        self.last_path_layers = None
 
         self.start_idx = np.zeros(3, dtype=np.int32)
         self.end_idx = np.zeros(3, dtype=np.int32)
@@ -60,6 +65,7 @@ class TomogramPlanner(object):
 
         self.trav = trav
         self.elev_g = elev_g
+        self.elev_c = elev_c
 
         self.initPlanner(trav, trav_gx, trav_gy, elev_g, elev_c)
         
@@ -94,6 +100,43 @@ class TomogramPlanner(object):
             -trav_gx.reshape(-1, trav_gx.shape[-1]).astype(np.double)
         )
 
+    def set_dynamic_cost_snapshot(self, dynamic_cost, version=0, lethal_cost=100):
+        cost = np.asarray(dynamic_cost, dtype=np.uint8, order='C')
+        expected = (self.n_slice, self.map_dim[0], self.map_dim[1])
+        if cost.shape != expected:
+            raise ValueError(
+                'dynamic cost shape {} does not match PCT elevation/tomogram shape {}'.format(
+                    cost.shape, expected))
+        if int(lethal_cost) <= self.traversable_cost_threshold or int(lethal_cost) > 255:
+            raise ValueError('dynamic lethal cost must exceed static threshold and fit uint8')
+        self.planner.set_dynamic_cost_map(cost, int(lethal_cost))
+        self.dynamic_cost = cost
+        self.dynamic_version = int(version)
+        self.dynamic_lethal_cost = int(lethal_cost)
+
+    def clear_dynamic_cost(self):
+        self.planner.clear_dynamic_cost_map()
+        self.dynamic_cost = None
+        self.dynamic_version = 0
+
+    def _raw_astar_path(self, path_finder, reference_height):
+        path = np.asarray(path_finder.get_result_matrix(), dtype=np.float64)
+        if path.ndim != 2 or path.shape[0] == 0 or path.shape[1] < 3:
+            return None, None
+        layers = np.rint(path[:, 0]).astype(np.int32)
+        rows = np.rint(path[:, 1]).astype(np.int32)
+        cols = np.rint(path[:, 2]).astype(np.int32)
+        if (np.any(layers < 0) or np.any(layers >= self.n_slice) or
+                np.any(rows < 0) or np.any(rows >= self.map_dim[0]) or
+                np.any(cols < 0) or np.any(cols >= self.map_dim[1])):
+            raise ValueError('A* result contains invalid grid indices')
+        heights = self.elev_g[layers, rows, cols] / self.resolution
+        raw_grid = np.stack([cols, rows, heights], axis=1)
+        trajectory = transTrajGrid2Map(
+            self.map_dim, self.center, self.resolution, raw_grid,
+            reference_height=reference_height)
+        return trajectory, layers
+
     def plan(self, start_pos, end_pos, start_layer=0, end_layer=0,
              reference_height=0.0, optimize_path=True):
         if self.trav is None:
@@ -110,31 +153,16 @@ class TomogramPlanner(object):
         # planner.  Passing True unconditionally entered GPMP even for raw
         # A* requests; a same-cell start/goal then violated GPMP's minimum
         # two-point path precondition and aborted the whole PCT process.
+        self.last_path_layers = None
         if not self.planner.plan(self.start_idx, self.end_idx, bool(optimize_path)):
             return None
         path_finder: a_star.Astar = self.planner.get_path_finder()
-        path = path_finder.get_result_matrix()
-        if len(path) == 0:
-            return None
-
         if not optimize_path:
-            # A* returns [layer, row, column] grid indices. Preserve the
-            # discrete path and only convert it to map-frame XYZ coordinates.
-            path = np.asarray(path, dtype=np.float64)
-            if path.ndim != 2 or path.shape[1] < 3:
-                raise ValueError('invalid A* result matrix')
-            layers = np.rint(path[:, 0]).astype(np.int32)
-            rows = np.rint(path[:, 1]).astype(np.int32)
-            cols = np.rint(path[:, 2]).astype(np.int32)
-            if (np.any(layers < 0) or np.any(layers >= self.n_slice) or
-                    np.any(rows < 0) or np.any(rows >= self.map_dim[0]) or
-                    np.any(cols < 0) or np.any(cols >= self.map_dim[1])):
-                raise ValueError('A* result contains invalid grid indices')
-            heights = self.elev_g[layers, rows, cols] / self.resolution
-            raw_grid = np.stack([cols, rows, heights], axis=1)
-            return transTrajGrid2Map(
-                self.map_dim, self.center, self.resolution, raw_grid,
-                reference_height=reference_height)
+            raw_trajectory, raw_layers = self._raw_astar_path(path_finder, reference_height)
+            if raw_trajectory is None:
+                return None
+            self.last_path_layers = raw_layers
+            return raw_trajectory
 
         optimizer: traj_opt.GPMPOptimizer = (
             self.planner.get_trajectory_optimizer()
@@ -155,7 +183,8 @@ class TomogramPlanner(object):
         traj_3d = transTrajGrid2Map(
             self.map_dim, self.center, self.resolution, traj_3d,
             reference_height=reference_height)
-
+        layers = np.rint(layers).astype(np.int32)
+        self.last_path_layers = layers
         return traj_3d
 
     def select_layer(self, pos, desired_ground_height, max_height_error):
@@ -194,7 +223,20 @@ class TomogramPlanner(object):
         for layer in range(self.n_slice):
             valid = self.elev_g_valid[layer, row_min:row_max + 1, col_min:col_max + 1]
             traversable = self.trav[layer, row_min:row_max + 1, col_min:col_max + 1] <= self.traversable_cost_threshold
-            for local_row, local_col in np.argwhere(valid & traversable):
+            candidates = valid & traversable
+            if self.dynamic_cost is not None:
+                candidate_rows, candidate_cols = np.nonzero(candidates)
+                if len(candidate_rows):
+                    rows = candidate_rows + row_min
+                    cols = candidate_cols + col_min
+                    flat = ((layer * self.map_dim[0] + rows) * self.map_dim[1] + cols)
+                    costs = np.asarray(self.planner.get_dynamic_costs(
+                        flat.astype(np.uint64)), dtype=np.uint8)
+                    dynamic_free = np.zeros_like(candidates)
+                    keep = costs < self.dynamic_lethal_cost
+                    dynamic_free[candidate_rows[keep], candidate_cols[keep]] = True
+                    candidates &= dynamic_free
+            for local_row, local_col in np.argwhere(candidates):
                 row = row_min + int(local_row)
                 col = col_min + int(local_col)
                 candidate = np.array([

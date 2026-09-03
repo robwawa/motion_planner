@@ -1,0 +1,109 @@
+# 全局地图坐标系；点云、静态 PCD 和输出动态障碍均需对齐到该坐标系。
+map_frame: map
+# 机器人机体基座坐标系，用于机器人自体滤除和障碍物高度门控。
+base_frame: base
+# LiDAR 光心所在坐标系。即使输入点云已经在 map 坐标系，也必须提供该 TF，
+# 因为可见性/射线清除需要真实传感器位置。
+sensor_frame: laser_livox
+# 输入 LiDAR PointCloud2 话题。
+lidar_topic: /livox/Pointcloud2
+# 查询 TF 的超时时间，单位：秒。
+tf_timeout: 0.10
+
+# 仅供动态候选标记/聚类使用的点云体素下采样叶尺寸，单位：米。
+voxel_leaf_size: 0.08
+# 供射线遮挡和后方自由空间证据使用的完整有效视场点云下采样叶尺寸，单位：米。
+# 必须不大于 ray_search_radius 与 direct_clear_search_radius。
+visibility_voxel_leaf_size: 0.05
+# 实时点与静态 PCD 点的直接欧氏距离匹配半径，单位：米。
+static_match_radius: 0.15
+# 聚类级静态复检使用的匹配半径，单位：米；通常不小于 static_match_radius。
+static_recheck_radius: 0.20
+# 是否启用基于 PCD 法向量的局部静态表面匹配。
+# 该方法用于补偿 PCD 切向采样空隙，同时避免把突出于墙面的动态物体整体滤掉。
+static_surface_matching_enabled: true
+# 法向量表面匹配的邻域搜索半径，单位：米。
+static_surface_search_radius: 0.20
+# 点到静态表面的法向距离阈值，单位：米。
+static_surface_normal_distance: 0.05
+# 静态 PCD 法向量的最小有效模长。
+static_surface_min_normal_norm: 0.50
+# 一个动态候选聚类中允许被复检为静态点的最大比例。
+# 静态点比例大于该值时，整团聚类被视为静态残留并丢弃。
+static_cluster_ratio: 0.70
+# PCD 坐标系到 map_frame 的刚体变换：[x, y, z, roll, pitch, yaw]。
+# 平移单位：米；姿态角单位：弧度；变换顺序由节点固定实现。
+static_map_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+# 是否启用水平静态地面先验。只有在 map 坐标系中地面高度明确且近似无限延伸时启用。
+# 对坡道、多高度地面或未知绝对高度场景应保持关闭。
+static_ground_plane_enabled: false
+# 静态地面先验的 map 坐标系高度，单位：米。
+static_ground_plane_z: 0.0
+# 将点判为地面的高度容差，单位：米。
+static_ground_plane_tolerance: 0.05
+
+# LiDAR 最小有效量程，单位：米。
+min_range: 0.30
+# LiDAR 最大有效量程，单位：米。
+max_range: 10.0
+# 传感器坐标系中的点云高度下限，单位：米。
+min_z: -2.0
+# 传感器坐标系中的点云高度上限，单位：米。
+max_z: 3.0
+# 在 base_frame 中用于障碍标记的高度范围（DDDMR 风格）。
+# 超出该范围的点（尤其是天花板/高处墙面回波）不会进入动态静态差分。
+marking_minimum_height: 0.08
+marking_height: 0.60
+# 以 base_frame 为中心的历史滑动窗口 Z 轴下/上边界，单位：米。
+# 以 base_frame 为中心的机器人局部 XY 工作窗口半边长，单位：米。
+# 动态障碍标记和历史体素保留均使用此范围；传感器可见性扫描不受它限制。
+perception_window_size: 5.0
+# 仅用于历史体素保留和 history_window 线框显示，不影响新障碍点的 marking 高度筛选。
+# 默认与 marking 高度相同，修改后可独立扩大或收窄历史窗口高度。
+history_window_min_height: -2.00
+history_window_max_height: 2.00
+
+# 机器人自体滤除半径，单位：米。
+self_filter_radius: 0.30
+# 机器人自体滤除的 base_frame 高度下限，单位：米。
+self_filter_z_min: -0.40
+# 机器人自体滤除的 base_frame 高度上限，单位：米。
+self_filter_z_max: 0.50
+
+# 欧式聚类邻域容差，单位：米。
+cluster_tolerance: 0.20
+# 聚类允许的最小点数。
+cluster_min_size: 5
+# 聚类允许的最大点数。
+cluster_max_size: 100000
+# 完整有效传感器可见性扫描的点数少于该值时，认为本帧扫描不健康；
+# 不执行清除并保留上一帧动态障碍快照。
+min_clearing_scan_points: 6
+
+# 新聚类与已有障碍之间的观测质心关联距离，单位：米。
+association_distance: 0.50
+# Mark/Clear 证据在 map 坐标系的独立体素中维护，单位：米。
+obstacle_voxel_size: 0.08
+# 新障碍连续命中次数达到该值后才确认并发布。
+confirm_hits: 2
+# 未确认（TENTATIVE）障碍允许保留的最长时间，单位：秒。
+max_tentative_age: 2.0
+
+# 射线采样步长，单位：米。
+ray_step: 0.05
+# 射线采样点查询当前扫描的半径，单位：米。
+ray_search_radius: 0.10
+# 判断旧体素前方遮挡时，在目标体素附近跳过的保护距离，单位：米。
+ray_target_guard: 0.20
+# DDDMR 风格直接清理：射线前方无阻挡且旧体素邻域无有效回波时，单帧删除。
+# 此参数是旧体素邻域回波查询半径，单位：米；过小易漏检，过大易保留已移除障碍。
+direct_clear_search_radius: 0.10
+# 水平视场角下限/上限，单位：度；默认 -180 到 180 表示全周水平视场。
+horizontal_fov_min: -180.0
+horizontal_fov_max: 180.0
+# 垂直视场角下限/上限，单位：度。
+vertical_fov_bottom: -7.0
+vertical_fov_top: 55.0
+
+# 是否发布调试点云、障碍物 marker 和可见性射线话题。
+publish_debug: true

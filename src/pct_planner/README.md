@@ -1,5 +1,37 @@
 # PCT Planner
 
+## Dynamic obstacle costs
+
+The ROS1 wrapper supports an optional dense dynamic obstacle layer with the
+same `[layer][row][col]` layout as the loaded tomogram. Dynamic perception is
+owned exclusively by `dynamic_perception_3d`; PCT subscribes to its complete
+`/dynamic_perception/dynamic_cloud` snapshots in the `map` frame and only
+projects them onto valid PCT layers, inflates cost and monitors the path.
+Static tomogram data is never modified.
+
+Each healthy snapshot completely replaces the PCT projection. Obstacle
+confirmation, occlusion retention, visibility clearing, and local history
+window release are owned exclusively by `dynamic_perception_3d`; PCT keeps no
+independent sliding window or odometry subscription. A healthy empty snapshot
+therefore clears the PCT dynamic layer. If `health_topic` (default
+`/dynamic_perception/scan_healthy`) becomes false, or no healthy snapshot is
+received for `dynamic_source_timeout` (default `0.5s`), PCT immediately clears
+its projection and publishes `/pct/dynamic_layer_ok=false`.
+
+Dynamic costs are fused in the multi-layer A* search. GPMP remains enabled for
+geometric optimization but does not perform a second dynamic-cost check; an
+optimization failure is reported as no path, consistent with the original PCT
+behavior. SCAN is the sole global-replan trigger: navigation requests a new
+PCT Action only after SCAN has exhausted local avoidance and stopped safely.
+
+All PCT defaults and memory limits are in `config/pct_planner.yaml`. The dynamic
+overlay uses a boolean occupancy grid and a uint8 cost grid per PCT cell; the
+native A* snapshot is bounded separately. Dynamic mode is disabled at startup
+when the configured memory budget
+would be exceeded. Point-to-layer assignment is additionally processed in
+bounded chunks (`assignment_chunk_size`) so large scans do not create an
+unbounded `[layer, point]` temporary allocation.
+
 ## 项目简介
 
 本项目是论文 **Efficient Global Navigational Planning in 3-D Structures Based on Point Cloud Tomography**（已被 TMECH 接收）的实现。
@@ -134,13 +166,16 @@ roslaunch pct_planner pct_planner.launch \
   backend:=cpu launch_rviz:=true
 ```
 
-可用参数：
+可用启动参数：
 
 - `pcd_map_file`：输入 PCD 文件，可为绝对路径或相对 `rsc/pcd/` 的路径；默认 Building PCD。
 - `tomogram_name`：输出/读取的 tomogram 文件名（不带 `.pickle`）；默认 `building2_9`。
 - `backend`：`auto`、`cpu` 或 `cuda`。
-- `launch_rviz`：是否同时启动 RViz，默认 `false`。
-- `wait_timeout`：规划节点等待 tomogram 的最长时间，默认 300 秒。
+- `launch_rviz`：是否同时启动 RViz，默认 `true`。
+
+PCT 的地图 profile、层析话题、规划器与动态障碍层参数均在
+`config/pct_planner.yaml` 中统一配置。动态障碍层默认关闭；如需启用，修改
+`pct_planner.dynamic_replan.enabled`，并独立启动 `dynamic_perception_3d`。
 
 ## 回归测试
 

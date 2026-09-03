@@ -6,10 +6,12 @@
   <!-- A1's settled base height in this Gazebo model; 0.5 m is the old Go2 value. -->
   <arg name="body_height" default="0.315" />
   <arg name="controller_mode" default="mpc" />
-  <arg name="optimize_path" default="true" />
   <arg name="reference_path_mode" default="polyline_rolling_window" />
   <arg name="tomogram_name" default="building2_9" />
   <arg name="pcd_map_file" default="$(find pct_planner)/rsc/pcd/building2_9.pcd" />
+  <!-- Runs only the independent perception module; it does not alter the
+       existing planner dynamic-cloud input or replanning behavior. -->
+  <arg name="enable_dynamic_perception" default="true" />
   <arg name="conda_env_path"
        default="$(optenv CONDA_ENV_PATH /media/wa/移动硬盘1/anaconda_env/conda_envs/inspection)" />
 
@@ -20,15 +22,22 @@
     <arg name="conda_env_path" value="$(arg conda_env_path)" />
   </include>
 
-  <include file="$(find pct_planner)/launch/planner.launch">
-    <arg name="tomogram_name" value="$(arg tomogram_name)" />
-    <arg name="optimize_path" value="$(arg optimize_path)" />
-    <arg name="body_height" value="$(arg body_height)" />
+  <include if="$(arg enable_dynamic_perception)"
+           file="$(find dynamic_perception_3d)/launch/dynamic_perception.launch">
+    <!-- Keep Gazebo perception and tomography in the same world-space PCD. -->
+    <arg name="static_pcd_file" value="$(arg pcd_map_file)" />
+    <arg name="scenario_config_file"
+         value="$(find dynamic_perception_3d)/config/dynamic_perception_gazebo.yaml" />
   </include>
+
   <include file="$(find pct_planner)/launch/tomography.launch">
     <arg name="backend" value="cpu" />
     <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
     <arg name="tomogram_name" value="$(arg tomogram_name)" />
+  </include>
+  <include file="$(find pct_planner)/launch/planner.launch">
+    <arg name="tomogram_name" value="$(arg tomogram_name)" />
+    <arg name="body_height" value="$(arg body_height)" />
   </include>
 
   <include file="$(find scan_planner)/launch/run.launch">
@@ -54,7 +63,6 @@
 
   <include file="$(find pct_scan_navigation)/launch/navigation.launch">
     <arg name="body_pose_topic" value="/Odometry_gazebo" />
-    <arg name="navigation_frame" value="map" />
     <arg name="default_goal_z" value="$(arg body_height)" />
   </include>
 

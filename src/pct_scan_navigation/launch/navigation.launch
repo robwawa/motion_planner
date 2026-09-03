@@ -1,19 +1,15 @@
 <launch>
   <arg name="body_pose_topic" default="/quad_0/body_pose" />
-  <arg name="navigation_frame" default="map" />
   <arg name="rviz_goal_topic" default="/move_base_simple/goal" />
   <arg name="default_goal_z" default="0.4" />
-  <arg name="validated_goal_topic" default="/navigation/validated_goal" />
   <node pkg="pct_scan_navigation" type="navigation_manager.py" name="navigation_manager" output="screen">
+    <rosparam command="load" file="$(find pct_scan_navigation)/config/navigation.yaml" />
     <param name="body_pose_topic" value="$(arg body_pose_topic)" />
-    <param name="navigation_frame" value="$(arg navigation_frame)" />
     <param name="rviz_goal_topic" value="$(arg rviz_goal_topic)" />
     <param name="default_goal_z" value="$(arg default_goal_z)" />
-    <param name="validated_goal_topic" value="$(arg validated_goal_topic)" />
   </node>
   <node pkg="pct_scan_navigation" type="goal_interactive_marker.py" name="goal_interactive_marker" output="screen">
     <param name="body_pose_topic" value="$(arg body_pose_topic)" />
-    <param name="navigation_frame" value="$(arg navigation_frame)" />
-    <param name="validated_goal_topic" value="$(arg validated_goal_topic)" />
+    <rosparam command="load" file="$(find pct_scan_navigation)/config/navigation.yaml" />
   </node>
 </launch>

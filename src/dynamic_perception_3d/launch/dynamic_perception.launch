@@ -1,0 +1,17 @@
+<launch>
+  <arg name="static_pcd_file"
+       default="$(find pct_planner)/rsc/pcd/building2_9.pcd" />
+  <!-- 配置文件选择是 launch 机制，不是节点算法参数。 -->
+  <arg name="config_file"
+       default="$(find dynamic_perception_3d)/config/dynamic_perception.yaml" />
+  <arg name="scenario_config_file" default="" />
+
+  <node pkg="dynamic_perception_3d" type="dynamic_perception_3d_node"
+        name="dynamic_perception_3d" output="screen">
+    <rosparam command="load"
+              file="$(arg config_file)" />
+    <rosparam command="load" file="$(arg scenario_config_file)"
+              if="$(eval arg('scenario_config_file') != '')" />
+    <param name="static_pcd_file" value="$(arg static_pcd_file)" />
+  </node>
+</launch>

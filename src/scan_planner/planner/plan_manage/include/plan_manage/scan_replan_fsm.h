@@ -88,6 +88,7 @@ namespace scan_planner
     bool rviz_height_ready_;
     bool go2_execution_frozen_;
     bool enable_fail_safe_, need_hover_stop_;
+    bool global_replan_after_local_failure_{false};
     FSM_EXEC_STATE exec_state_;
     int continuously_called_times_{0};
     int replan_fail_count_{0};

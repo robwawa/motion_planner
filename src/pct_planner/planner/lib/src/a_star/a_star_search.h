@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <cstddef>
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 
@@ -61,6 +63,15 @@ class Astar {
 
   void Reset();
 
+  void SetDynamicCostMap(const uint8_t* costs, size_t count,
+                         uint8_t lethal_cost);
+  void ClearDynamicCostMap();
+  std::vector<uint8_t> GetDynamicCosts(
+      const std::vector<size_t>& flat_indices) const;
+  size_t GetCellCount() const {
+    return static_cast<size_t>(max_layers_) * max_y_ * max_x_;
+  }
+
   void Debug() { debug_ = true; }
 
   bool Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal);
@@ -84,6 +95,9 @@ class Astar {
 
   double GetHeuristic(const Node* node1, const Node* node2) const;
 
+  size_t DynamicFlatIndex(int layer, int row, int col) const;
+  uint8_t DynamicCost(int layer, int row, int col) const;
+
   Eigen::MatrixXd PathToMatrix(const std::vector<Eigen::Vector3i>& path);
 
   void ToPathPoints(const std::vector<Eigen::Vector3i>& path,
@@ -103,6 +117,9 @@ class Astar {
   MultiLayerGridMap grid_map_;
   double cost_threshold_ = 35;
   double step_cost_weight_ = 1.0;
+  std::vector<uint8_t> dynamic_cost_;
+  uint8_t dynamic_lethal_cost_ = 100;
+  bool dynamic_cost_enabled_ = false;
 
   int search_layer_depth_ = 1;
   std::vector<int> search_layers_offset_;

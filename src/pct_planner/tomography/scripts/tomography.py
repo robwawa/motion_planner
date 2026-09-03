@@ -44,7 +44,9 @@ class Tomography(object):
     def __init__(self, cfg, profile, backend='auto', pcd_file=None,
                  tomogram_name=None):
         self.cfg = cfg
-        self.export_dir = rsg_root + cfg.map.export_dir
+        export_dir = rospy.get_param('~export_dir', cfg.map.export_dir)
+        self.export_dir = export_dir if os.path.isabs(export_dir) else os.path.join(
+            rsg_root, export_dir)
         self.pcd_file = pcd_file
         self.tomogram_name = tomogram_name
         self.resolution = profile.map.resolution
@@ -91,22 +93,22 @@ class Tomography(object):
         self.publishTerrainMap(layers_g, layers_t)
 
     def initROS(self):
-        self.map_frame = self.cfg.ros.map_frame
+        self.map_frame = rospy.get_param('~map_frame', self.cfg.ros.map_frame)
 
-        pointcloud_topic = self.cfg.ros.pointcloud_topic
+        pointcloud_topic = rospy.get_param('~pointcloud_topic', self.cfg.ros.pointcloud_topic)
         self.pointcloud_pub = rospy.Publisher(pointcloud_topic, PointCloud2, latch=True, queue_size=1)
 
         self.layer_G_pub_list = []
         self.layer_C_pub_list = []
-        layer_G_topic = self.cfg.ros.layer_G_topic
-        layer_C_topic = self.cfg.ros.layer_C_topic
+        layer_G_topic = rospy.get_param('~layer_G_topic', self.cfg.ros.layer_G_topic)
+        layer_C_topic = rospy.get_param('~layer_C_topic', self.cfg.ros.layer_C_topic)
         for i in range(self.n_slice):
             layer_G_pub = rospy.Publisher(layer_G_topic + str(i), PointCloud2, latch=True, queue_size=1)
             self.layer_G_pub_list.append(layer_G_pub)
             layer_C_pub = rospy.Publisher(layer_C_topic + str(i), PointCloud2, latch=True, queue_size=1)
             self.layer_C_pub_list.append(layer_C_pub)
 
-        tomogram_topic = self.cfg.ros.tomogram_topic
+        tomogram_topic = rospy.get_param('~tomogram_topic', self.cfg.ros.tomogram_topic)
         self.tomogram_pub = rospy.Publisher(tomogram_topic, PointCloud2, latch=True, queue_size=1)
         terrain_map_topic = rospy.get_param('~terrain_map_topic', self.cfg.ros.terrain_map_topic)
         self.terrain_map_pub = rospy.Publisher(terrain_map_topic, PctTerrainMap, latch=True, queue_size=1)
@@ -119,7 +121,6 @@ class Tomography(object):
         if points.size == 0:
             raise RuntimeError("cannot load point cloud: {}".format(path))
         rospy.loginfo("PCD points: %d", points.shape[0])
-
         if points.shape[1] > 3:
             points = points[:, :3]
         self.points_max = np.max(points, axis=0)
@@ -300,7 +301,7 @@ if __name__ == '__main__':
 
     cfg = Config()
 
-    rospy.init_node('pointcloud_tomography', anonymous=True)
+    rospy.init_node('pointcloud_tomography')
     profile = load_public_profile()
     rospy.loginfo('PCT traversability: kernel=%d slope=%.3f step=%.3f barrier=%.3f threshold=%.3f',
                   profile.trav.kernel_size, profile.trav.slope_max,

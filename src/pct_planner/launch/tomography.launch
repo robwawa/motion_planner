@@ -4,8 +4,7 @@
   <arg name="pcd_map_file" default="$(find pct_planner)/rsc/pcd/building2_9.pcd" />
   <arg name="tomogram_name" default="building2_9" />
 
-  <rosparam command="load" file="$(find pct_planner)/config/pct_profile.yaml"
-            ns="/pct" />
+  <rosparam command="load" file="$(find pct_planner)/config/pct_planner.yaml" />
 
   <node pkg="pct_planner" type="pct_tomography_node.py"
         name="pointcloud_tomography" output="screen"

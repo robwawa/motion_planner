@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>dynamic_perception_3d</name>
+  <version>0.1.0</version>
+  <description>Static-map subtraction and lifecycle tracking for dynamic 3D obstacles.</description>
+
+  <maintainer email="byangar@connect.ust.hk">Bowen Yang</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>geometry_msgs</depend>
+  <depend>libpcl-all-dev</depend>
+  <depend>pcl_conversions</depend>
+  <depend>pcl_ros</depend>
+  <depend>roscpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_eigen</depend>
+  <depend>tf2_ros</depend>
+  <depend>visualization_msgs</depend>
+
+  <test_depend>rostest</test_depend>
+  <test_depend>rospy</test_depend>
+  <test_depend>tf</test_depend>
+</package>

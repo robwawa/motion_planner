@@ -1,0 +1,9 @@
+# Gazebo Building 与源 PCD 的固定配准差异及地面先验。
+# 源 PCD 到 map 坐标系的刚体变换：[x, y, z, roll, pitch, yaw]。
+static_map_pose: [0.0, 0.0, -0.1, 0.0, 0.0, 0.0]
+# 是否启用无限延伸的水平静态地面先验。
+static_ground_plane_enabled: true
+# 静态地面在 map 坐标系中的高度，单位：米。
+static_ground_plane_z: 0.0
+# 点被判定为地面时允许的高度误差，单位：米。
+static_ground_plane_tolerance: 0.05
