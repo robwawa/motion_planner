@@ -6,5 +6,6 @@
     ],
     "python.analysis.extraPaths": [
         "/opt/ros/noetic/lib/python3/dist-packages"
-    ]
+    ],
+    "cmake.sourceDirectory": "/home/wa/inspection/3D_motion_planner/motion_planner/src"
 }
