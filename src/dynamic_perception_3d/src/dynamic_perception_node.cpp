@@ -1,4 +1,5 @@
 #include "dynamic_perception_3d/dynamic_perception_node.hpp"
+#include <motion_planner_log/logging.h>
 
 #include <algorithm>
 #include <cmath>
@@ -311,17 +312,17 @@ DynamicPerceptionNode::DynamicPerceptionNode(ros::NodeHandle nh,
   cloud_subscriber_ = nh_.subscribe<sensor_msgs::PointCloud2>(
       lidar_topic_, 1, &DynamicPerceptionNode::CloudCallback, this,
       ros::TransportHints().tcpNoDelay());
-  ROS_INFO("dynamic_perception_3d ready: map=%zu points, cloud=%s, frame=%s",
+  MOTION_PLANNER_LOG_INFO("dynamic_perception_3d ready: map=%zu points, cloud=%s, frame=%s",
            static_filter_.static_map()->size(), lidar_topic_.c_str(),
            map_frame_.c_str());
-  ROS_INFO("static map pose xyz/rpy=[%.3f %.3f %.3f %.3f %.3f %.3f], "
+  MOTION_PLANNER_LOG_DEBUG("static map pose xyz/rpy=[%.3f %.3f %.3f %.3f %.3f %.3f], "
            "ground plane=%s (z=%.3f, tolerance=%.3f)",
            static_map_pose[0], static_map_pose[1], static_map_pose[2],
            static_map_pose[3], static_map_pose[4], static_map_pose[5],
            static_config.static_ground_plane_enabled ? "enabled" : "disabled",
            static_config.static_ground_plane_z,
            static_config.static_ground_plane_tolerance);
-  ROS_INFO("static surface matching=%s, radius=%.3f, normal distance=%.3f; "
+  MOTION_PLANNER_LOG_DEBUG("static surface matching=%s, radius=%.3f, normal distance=%.3f; "
            "base marking height=[%.3f, %.3f]",
            static_config.static_surface_matching_enabled ? "enabled" : "disabled",
            static_config.static_surface_search_radius,
@@ -411,9 +412,13 @@ void DynamicPerceptionNode::CloudCallback(
     const sensor_msgs::PointCloud2ConstPtr& message) {
   const ros::Time stamp = message ? message->header.stamp : ros::Time::now();
   if (!message || message->header.frame_id.empty()) {
-    ROS_WARN_THROTTLE(2.0, "dynamic perception rejected cloud with empty frame_id");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "dynamic perception rejected cloud with empty frame_id");
     PublishUnhealthy(stamp, "empty cloud frame_id");
     return;
+  }
+  if (message->width == 0 || message->height == 0 || message->data.empty()) {
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "dynamic perception received an empty point cloud: frame=%s",
+                                     message->header.frame_id.c_str());
   }
   bool has_x = false;
   bool has_y = false;
@@ -424,7 +429,7 @@ void DynamicPerceptionNode::CloudCallback(
     has_z = has_z || field.name == "z";
   }
   if (!has_x || !has_y || !has_z) {
-    ROS_WARN_THROTTLE(2.0, "dynamic perception requires x/y/z PointCloud2 fields");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "dynamic perception requires x/y/z PointCloud2 fields");
     PublishUnhealthy(stamp, "cloud has no x/y/z fields");
     return;
   }
@@ -488,16 +493,16 @@ void DynamicPerceptionNode::CloudCallback(
                    message->header.stamp);
       PublishMarkers(message->header.stamp);
     }
-    ROS_DEBUG_THROTTLE(1.0,
+    MOTION_PLANNER_LOG_DEBUG_THROTTLE(1.0,
                        "dynamic perception: scan=%zu static=%zu surface=%zu candidates=%zu clusters=%zu",
                        current_scan->size(), subtraction.static_matched->size(),
                        subtraction.static_surface_matched->size(),
                        subtraction.dynamic_candidates->size(), accepted.size());
   } catch (const tf2::TransformException& error) {
-    ROS_WARN_THROTTLE(2.0, "dynamic perception TF unavailable: %s", error.what());
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "dynamic perception TF unavailable: %s", error.what());
     PublishUnhealthy(stamp, "TF unavailable");
   } catch (const std::exception& error) {
-    ROS_ERROR_THROTTLE(2.0, "dynamic perception rejected cloud: %s", error.what());
+    MOTION_PLANNER_LOG_ERROR_THROTTLE(2.0, "dynamic perception rejected cloud: %s", error.what());
     PublishUnhealthy(stamp, "cloud processing failed");
   }
 }
@@ -515,6 +520,14 @@ void DynamicPerceptionNode::PublishCloud(const ros::Publisher& publisher,
 
 void DynamicPerceptionNode::PublishHealth(bool healthy) const {
   if (!scan_healthy_publisher_) return;
+  if (health_state_known_ && healthy != last_health_) {
+    if (healthy)
+      MOTION_PLANNER_LOG_INFO("Dynamic perception input recovered.");
+    else
+      MOTION_PLANNER_LOG_WARN("Dynamic perception input became unhealthy; preserving last snapshot.");
+  }
+  health_state_known_ = true;
+  last_health_ = healthy;
   std_msgs::Bool message;
   message.data = healthy;
   scan_healthy_publisher_.publish(message);
@@ -522,7 +535,7 @@ void DynamicPerceptionNode::PublishHealth(bool healthy) const {
 
 void DynamicPerceptionNode::PublishUnhealthy(
     const ros::Time& stamp, const std::string& reason) {
-  ROS_WARN_THROTTLE(2.0, "dynamic perception preserving snapshot: %s",
+  MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "dynamic perception preserving snapshot: %s",
                     reason.c_str());
   PublishHealth(false);
   PublishState(stamp);

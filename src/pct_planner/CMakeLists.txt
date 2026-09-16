@@ -1,17 +1,24 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 2.8.3)
 project(pct_planner)
 
+######################
+### 依赖包
+######################
 find_package(catkin REQUIRED COMPONENTS
   actionlib
   actionlib_msgs
   geometry_msgs
   message_generation
+  motion_planner_log
   nav_msgs
   rospy
   sensor_msgs
   std_msgs
 )
 
+######################
+### 消息和 Action 生成
+######################
 add_action_files(
   FILES
   PlanPath3D.action
@@ -30,21 +37,44 @@ generate_messages(
   std_msgs
 )
 
-catkin_package(CATKIN_DEPENDS actionlib actionlib_msgs geometry_msgs message_runtime nav_msgs rospy sensor_msgs std_msgs)
+######################
+### Catkin 配置
+######################
+catkin_package(CATKIN_DEPENDS actionlib actionlib_msgs geometry_msgs message_runtime motion_planner_log nav_msgs rospy sensor_msgs std_msgs)
 
 if(CATKIN_ENABLE_TESTING)
+  ######################
+  ### 测试
+  ######################
   catkin_add_nosetests(test)
 endif()
 
+#############
+## 安装规则 ##
+#############
+# Install Python entry points and the source-space configuration used by the
+# tomography/planner wrappers.
 catkin_install_python(PROGRAMS
   scripts/pct_tomography_node.py
   scripts/pct_planner_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY launch rsc config
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-)
+######################
+### 运行时资源
+######################
+# 参考 gdlp3dSlam：只安装运行时明确需要的资源目录，不把整个资源目录
+# （例如文档、演示图片等非运行文件）原样复制到 install/share。
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch)
+install(DIRECTORY config/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config)
+install(DIRECTORY rsc/pcd/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/rsc/pcd)
+install(DIRECTORY rsc/rviz/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/rsc/rviz)
+install(DIRECTORY rsc/tomogram/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/rsc/tomogram)
 install(DIRECTORY tomography/config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tomography
   PATTERN "__pycache__" EXCLUDE
@@ -56,9 +86,11 @@ install(DIRECTORY planner/config
   PATTERN "*.pyc" EXCLUDE
 )
 
-# Keep the Python implementation available in an installed package.  The
+# Keep the Python implementation available in an installed package. The
 # native planner libraries are produced by planner/build*.sh and are copied
 # when they exist; source-space launches continue to use the build outputs.
+# Python configuration and scripts are installed under their original package
+# subdirectories because the wrappers load them by relative path.
 install(DIRECTORY tomography/scripts
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/tomography
   FILES_MATCHING PATTERN "*.py"

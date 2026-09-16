@@ -1,4 +1,5 @@
 #include "plan_env/grid_map.h"
+#include <motion_planner_log/logging.h>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -96,7 +97,7 @@ void GridMap::initMap(ros::NodeHandle &nh)
       
   if (mp_.sensor_type_ != "lidar" && mp_.sensor_type_ != "depth")
   {
-    ROS_ERROR_STREAM("[GridMap] invalid grid_map/sensor_type: " << mp_.sensor_type_
+    MOTION_PLANNER_LOG_ERROR_STREAM("invalid grid_map/sensor_type: " << mp_.sensor_type_
                                                                 << ", fallback to lidar.");
     mp_.sensor_type_ = "lidar";
   }
@@ -269,7 +270,7 @@ void GridMap::rebuildSupportSamples(const string& model)
   }
   else
   {
-    ROS_WARN("[GridMap] Unsupported support_model '%s'; use double_cylinder.", model.c_str());
+    MOTION_PLANNER_LOG_WARN("Unsupported support_model '%s'; use double_cylinder.", model.c_str());
     traversability_profile_.support_samples.emplace_back(mp_.double_cylinder_offset_, 0.0);
     traversability_profile_.support_samples.emplace_back(-mp_.double_cylinder_offset_, 0.0);
   }
@@ -299,17 +300,17 @@ void GridMap::pctTerrainMapCallback(const pct_planner::PctTerrainMapConstPtr& ms
   std::string error;
   if (!map->setFromMessage(*msg, error))
   {
-    ROS_ERROR("[GridMap] Reject PCT terrain map: %s", error.c_str());
+    MOTION_PLANNER_LOG_ERROR("Reject PCT terrain map: %s", error.c_str());
     return;
   }
   if (!mp_.frame_id_.empty() && map->frameId() != mp_.frame_id_)
   {
-    ROS_ERROR("[GridMap] Reject PCT terrain map frame '%s'; grid map frame is '%s'.",
+    MOTION_PLANNER_LOG_ERROR("Reject PCT terrain map frame '%s'; grid map frame is '%s'.",
               map->frameId().c_str(), mp_.frame_id_.c_str());
     return;
   }
   std::atomic_store(&pct_terrain_map_, map);
-  ROS_INFO("[GridMap] Cached PCT terrain map: %s, %u layers x %u rows x %u cols.",
+  MOTION_PLANNER_LOG_INFO("Cached PCT terrain map: %s, %u layers x %u rows x %u cols.",
            map->frameId().c_str(), msg->layers, msg->rows, msg->cols);
 }
 
@@ -492,8 +493,8 @@ bool GridMap::isPctPointTraversable(Eigen::Vector3d pos,
   {
     if (query_status)
       *query_status = PctTerrainMap::QueryStatus::kInvalidMap;
-    ROS_WARN_THROTTLE(1.0,
-                      "[GridMap] PCT map unavailable; fall back to inflated SCAN occupancy.");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(1.0,
+                      "PCT map unavailable; fall back to inflated SCAN occupancy.");
     return true;
   }
   const double expected_ground_z = pos(2) - traversability_profile_.body_height;
@@ -510,11 +511,11 @@ bool GridMap::isPctPointTraversable(Eigen::Vector3d pos,
                          status == PctTerrainMap::QueryStatus::kNoElevation;
     if (unknown)
     {
-      ROS_DEBUG_THROTTLE(1.0, "[GridMap] PCT data unavailable at query point; use inflated SCAN occupancy.");
+      MOTION_PLANNER_LOG_DEBUG_THROTTLE(1.0, "PCT data unavailable at query point; use inflated SCAN occupancy.");
       return true;
     }
     if (pct_traversability_.debug_rejection_stats)
-      ROS_DEBUG_THROTTLE(1.0, "[GridMap] PCT rejection: %s",
+      MOTION_PLANNER_LOG_DEBUG_THROTTLE(1.0, "PCT rejection: %s",
                          PctTerrainMap::queryStatusName(status));
     return false;
   }
@@ -1139,7 +1140,7 @@ void GridMap::updateOccupancyCallback(const ros::TimerEvent & /*event*/)
   // md_.max_fuse_time_ = max(md_.max_fuse_time_, (t2 - t1).toSec());
 
   // if (mp_.show_occ_time_)
-  //   ROS_WARN("Fusion: cur t = %lf, avg t = %lf, max t = %lf", (t2 - t1).toSec(),
+  //   MOTION_PLANNER_LOG_WARN("Fusion: cur t = %lf, avg t = %lf, max t = %lf", (t2 - t1).toSec(),
   //            md_.fuse_time_ / md_.update_num_, md_.max_fuse_time_);
 
   md_.occ_need_update_ = false;
@@ -1251,7 +1252,7 @@ void GridMap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr &img)
 
   if (!md_.has_ray_pose_)
   {
-    ROS_WARN_THROTTLE(1.0, "[GridMap] no /grid_map/sensor_pose yet for lidar cloud update.");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "no /grid_map/sensor_pose yet for lidar cloud update.");
     return;
   }
 
@@ -1390,7 +1391,7 @@ void GridMap::publishMapInflate(bool all_info)
   pcl::toROSMsg(cloud, cloud_msg);
   map_inf_pub_.publish(cloud_msg);
 
-  // ROS_INFO("pub map");
+  // MOTION_PLANNER_LOG_INFO("pub map");
 }
 
 void GridMap::publishSlidingMapFrame()

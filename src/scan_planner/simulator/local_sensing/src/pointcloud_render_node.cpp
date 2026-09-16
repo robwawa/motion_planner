@@ -1,4 +1,5 @@
 #include <nav_msgs/Odometry.h>
+#include <motion_planner_log/logging.h>
 #include <nav_msgs/Path.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/kdtree/kdtree_flann.h>
@@ -239,7 +240,7 @@ void publishPinholeDepth(const ros::Time &stamp)
 {
   if (cam_width <= 0 || cam_height <= 0 || cam_fx <= 0.0 || cam_fy <= 0.0)
   {
-    ROS_WARN_THROTTLE(1.0, "Invalid pinhole camera intrinsics.");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "Invalid pinhole camera intrinsics.");
     return;
   }
 
@@ -576,7 +577,7 @@ void dynobjGenerate(const ros::TimerEvent &event)
     //   case 1:
     //     // with gravity
     //     // fly_time = (ros::Time::now() - dyn_start_time_vec[n]).toSec();
-    //     // ROS_INFO("In dyn mode 1");
+    //     // MOTION_PLANNER_LOG_INFO("In dyn mode 1");
     //     for (int n = 0; n < dynobject_num; n++)
     //     {
     //       fly_time = (ros::Time::now() - dyn_start_time_vec[n]).toSec();
@@ -816,13 +817,13 @@ void rcvOdometryCallback(const nav_msgs::Odometry &odom)
     searchPoint.z = odom.pose.pose.position.z;
     if (_kdtreeLocalMap.radiusSearch(searchPoint, collision_range, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
     {
-      ROS_ERROR("ENVIRONMENT COLLISION DETECTED!!!");
+      MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "Environment collision detected.");
     }
     if (dynobj_enable && has_dyn_map)
     {
       if (kdtree_dyn.radiusSearch(searchPoint, collision_range, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
       {
-        ROS_ERROR("DYNAMIC OBJECTS COLLISION DETECTED!!!");
+        MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "Dynamic obstacle collision detected.");
       }
     }
 
@@ -832,7 +833,7 @@ void rcvOdometryCallback(const nav_msgs::Odometry &odom)
     collision_check_time_count++;
     if (collision_check_time_count % 100 == 0)
     {
-      // ROS_WARN("Collision check time: %f", collision_check_time_sum / collision_check_time_count);
+      // MOTION_PLANNER_LOG_WARN("Collision check time: %f", collision_check_time_sum / collision_check_time_count);
     }
   }
 
@@ -843,7 +844,7 @@ void rcvGlobalPointCloudCallBack(const sensor_msgs::PointCloud2 &pointcloud_map)
   if (has_global_map)
     return;
 
-  ROS_WARN("Global Pointcloud received..");
+  MOTION_PLANNER_LOG_INFO_ONCE("Global point cloud input received.");
 
   pcl::PointCloud<PointType> cloud_input;
   pcl::fromROSMsg(pointcloud_map, cloud_input);
@@ -865,7 +866,7 @@ void rcvGlobalPointCloudCallBack(const sensor_msgs::PointCloud2 &pointcloud_map)
   // 计算法线
   normalEstimation.compute(*all_normals);
 
-  ROS_WARN("Normal compute finished.., mapsize = %d", origin_mapptcount);
+  MOTION_PLANNER_LOG_DEBUG("Normal computation finished, map_points=%d", origin_mapptcount);
 
   // trans the map into hash map
   PointType pt_in, center;
@@ -882,7 +883,8 @@ void rcvGlobalPointCloudCallBack(const sensor_msgs::PointCloud2 &pointcloud_map)
   map_max(1) = global_mapmax.y;
   map_max(2) = global_mapmax.z;
 
-  ROS_INFO("map size = (%f %f %f) (%f %f %f)", map_min(0), map_min(1), map_min(2), map_max(0), map_max(1), map_max(2));
+  MOTION_PLANNER_LOG_DEBUG("Map bounds: min=(%.3f, %.3f, %.3f) max=(%.3f, %.3f, %.3f)",
+                          map_min(0), map_min(1), map_min(2), map_max(0), map_max(1), map_max(2));
   cube_numx = floor((global_mapmax.x - global_mapmin.x) / hash_cubesize) + 20;
   cube_numy = floor((global_mapmax.y - global_mapmin.y) / hash_cubesize) + 20;
   cube_numz = floor((global_mapmax.z - global_mapmin.z) / hash_cubesize) + 200;
@@ -1089,7 +1091,7 @@ void renderSensedPoints(const ros::TimerEvent &event)
   const double cover_dis = 0.55 * 1.7321 * downsample_res; // 0.707
   // compute effective range
   const double effect_range = cover_dis / sin(0.5 * polar_resolution * M_PI / 180.0);
-  // ROS_INFO("POLAR R = %f, EFFECT RANGE = %f",polar_pt.r,effect_range);
+  // MOTION_PLANNER_LOG_INFO("POLAR R = %f, EFFECT RANGE = %f",polar_pt.r,effect_range);
 
   double max_fov_angle;
   if (yaw_fov_margined_ > vertical_fov_margined_)
@@ -1248,7 +1250,7 @@ void renderSensedPoints(const ros::TimerEvent &event)
       int x = (int(-round(-62050.63 * t_i + 3.11 * cos(314159.2 * t_i) * sin(628.318 * 2 * t_i))) % 360) / polar_resolution;
       int y = round(25.5 * cos(20 * PI * t_i) + 4 * cos(2 * PI / 0.006 * t_i) * cos(10000 * PI * t_i) + 22.5) / polar_resolution + round(0.5 * polar_height);
 
-      // ROS_INFO("X = %d, Y = %d",x,y);
+      // MOTION_PLANNER_LOG_INFO("X = %d, Y = %d",x,y);
       if (x > (polar_width - 1))
       {
         x = (polar_width - 1);
@@ -1277,7 +1279,7 @@ void renderSensedPoints(const ros::TimerEvent &event)
   // hashmap with fov checker
   vector<BoxPointType> fov_boxes;
   // rotmyaw << 0,1,0;
-  // ROS_INFO("POS = %f,%f,%f, rotmyaw = %f,%f,%f", pos(0), pos(1),pos(2), rotmyaw(0),rotmyaw(1),rotmyaw(2));
+  // MOTION_PLANNER_LOG_INFO("POS = %f,%f,%f, rotmyaw = %f,%f,%f", pos(0), pos(1),pos(2), rotmyaw(0),rotmyaw(1),rotmyaw(2));
   vector<PointType> fov_points;
   vector<int> fov_pointsindex;
 
@@ -1305,7 +1307,7 @@ void renderSensedPoints(const ros::TimerEvent &event)
         }
       }
     }
-    // ROS_INFO("POINT SIZE = %d, box size = %d", fov_points.size(), fov_boxes.size());
+    // MOTION_PLANNER_LOG_INFO("POINT SIZE = %d, box size = %d", fov_points.size(), fov_boxes.size());
   }
   else
   {
@@ -1395,13 +1397,13 @@ shared(pattern_matrix, polar_matrix, cloud_all_map, pointIdxRadiusSearch,       
       dir_vec = rot.transpose() * dir;
 
       euc2polar(dir_vec, dir_vec.norm(), &polar_pt);
-      // ROS_INFO("dir_vec = %f,%f,%f, polar = %d,%d",dir(0),dir(1),dir(2), polar_pt.theta,polar_pt.fi);
+      // MOTION_PLANNER_LOG_INFO("dir_vec = %f,%f,%f, polar = %d,%d",dir(0),dir(1),dir(2), polar_pt.theta,polar_pt.fi);
       int cen_theta_index = polar_pt.theta + round(0.5 * polar_width);
       int cen_fi_index = polar_pt.fi + round(0.5 * polar_height);
 
       int half_cover_angle = ceil(
           (asin(cover_dis / dir_vec.norm()) / (M_PI * polar_resolution / 180.0)));
-      // ROS_INFO("half cover angle = %d",half_cover_angle);
+      // MOTION_PLANNER_LOG_INFO("half cover angle = %d",half_cover_angle);
       // int half_cover_angle = 1;
 
       if (polar_pt.r > effect_range)
@@ -1478,7 +1480,7 @@ shared(pattern_matrix, polar_matrix, cloud_all_map, pointIdxRadiusSearch,       
   ros::Time t5 = ros::Time::now();
   duration4 = (t5 - t4).toSec() + duration4;
 
-  // ROS_INFO("After first filter");
+  // MOTION_PLANNER_LOG_INFO("After first filter");
   ros::Time t6 = ros::Time::now();
 
   if (plane_interline == 1)
@@ -1513,7 +1515,7 @@ shared(polarindex_matrix, culling_kdindex)
 #pragma omp critical
       culling_kdindex.insert(culling_kdindex.end(), vec_private.begin(), vec_private.end());
     }
-    // ROS_INFO("CULLING COUNT = %d",culling_kdindex.size());
+    // MOTION_PLANNER_LOG_INFO("CULLING COUNT = %d",culling_kdindex.size());
 
     t6 = ros::Time::now();
     duration5 = (t6 - t5).toSec() + duration5;
@@ -1588,7 +1590,7 @@ shared(culling_kdindex,                                                         
         dir_vec = rot.transpose() * dir;
         double pt_dis = dir_vec.norm();
         euc2polar(dir_vec, pt_dis, &polar_pt);
-        // ROS_INFO("dir_vec = %f,%f,%f, polar = %d,%d",dir(0),dir(1),dir(2), polar_pt.theta,polar_pt.fi);
+        // MOTION_PLANNER_LOG_INFO("dir_vec = %f,%f,%f, polar = %d,%d",dir(0),dir(1),dir(2), polar_pt.theta,polar_pt.fi);
         int cen_theta_index = polar_pt.theta + round(0.5 * polar_width);
         int cen_fi_index = polar_pt.fi + round(0.5 * polar_height);
 
@@ -1596,7 +1598,7 @@ shared(culling_kdindex,                                                         
             (asin(cover_dis / pt_dis) / (M_PI * polar_resolution / 180.0)));
 
         ros::Time t_in2 = ros::Time::now();
-        // ROS_INFO("Init using %f s",(t_in2-t_in1).toSec());
+        // MOTION_PLANNER_LOG_INFO("Init using %f s",(t_in2-t_in1).toSec());
 
         //! check if it is dyn points
         if (likely(point_index < origin_mapptcount))
@@ -1654,7 +1656,7 @@ shared(culling_kdindex,                                                         
 
                 if ((inter_point_world - pt3).norm() > 1 * 0.8660254 * downsample_res) // sqrt 3   0.5*1.7321  2*0.8660254*downsample_res
                 {
-                  // ROS_INFO("OUT OF LIMIT");
+                  // MOTION_PLANNER_LOG_INFO("OUT OF LIMIT");
                 }
                 else
                 {
@@ -1715,7 +1717,7 @@ shared(culling_kdindex,                                                         
           }
           //  ros::Time t_in6 = ros::Time::now();
           //   duration_direct =duration_direct + (t_in6-t_in5).toSec();
-          //  ROS_INFO("End one");
+          //  MOTION_PLANNER_LOG_INFO("End one");
         }
       }
 #ifndef DEBUG
@@ -1723,11 +1725,11 @@ shared(culling_kdindex,                                                         
 #endif
   }
 
-  // ROS_INFO("After interline");
+  // MOTION_PLANNER_LOG_INFO("After interline");
 
   ros::Time t7 = ros::Time::now();
   duration6 = (t7 - t6).toSec() + duration6;
-  // ROS_INFO("Duration interline = %f, duration direct = %f",duration_interline,duration_direct);
+  // MOTION_PLANNER_LOG_INFO("Duration interline = %f, duration direct = %f",duration_interline,duration_direct);
 
   for (int i = 0; i < polar_width; i++)
   {
@@ -1904,10 +1906,10 @@ shared(use_avia_pattern, use_vlp32_pattern, use_minicf_pattern, is_360lidar,    
 
   if (free_flag == 1)
   {
-    // ROS_WARN("Give free far !!!!!!!!!!!!!!!!!!!!!!!");
+    // MOTION_PLANNER_LOG_WARN("Give free far !!!!!!!!!!!!!!!!!!!!!!!");
   }
 
-  // ROS_INFO("GET OUT OF LOOP, pointcount = %d, origin pointcount = %d, change point = %d",local_map_filled.points.size(),original_pointcount,changepointcount);
+  // MOTION_PLANNER_LOG_INFO("GET OUT OF LOOP, pointcount = %d, origin pointcount = %d, change point = %d",local_map_filled.points.size(),original_pointcount,changepointcount);
 
   local_map.width = local_map.points.size();
   local_map.height = 1;
@@ -1962,7 +1964,7 @@ shared(use_avia_pattern, use_vlp32_pattern, use_minicf_pattern, is_360lidar,    
 
   ros::Time t_total = ros::Time::now();
   duration8 = (t_total - t8).toSec() + duration8;
-  // ROS_INFO("Average statistics: %f, %f ,%f ,%f, %f, %f ,%f ,%f,  total_time = %f",duration1/sense_count,duration2/sense_count,duration3/sense_count,duration4/sense_count,duration5/sense_count,duration6/sense_count,duration7/sense_count,duration8/sense_count,(t_total-t1).toSec());
+  // MOTION_PLANNER_LOG_INFO("Average statistics: %f, %f ,%f ,%f, %f, %f ,%f ,%f,  total_time = %f",duration1/sense_count,duration2/sense_count,duration3/sense_count,duration4/sense_count,duration5/sense_count,duration6/sense_count,duration7/sense_count,duration8/sense_count,(t_total-t1).toSec());
 
   double comp_time_temp = (t_total - t1).toSec();
   comp_time_vec.push_back(comp_time_temp);
@@ -1972,7 +1974,7 @@ shared(use_avia_pattern, use_vlp32_pattern, use_minicf_pattern, is_360lidar,    
     geometry_msgs::PoseStamped totaltime_pub;
     totaltime_pub.pose.position.x = accumulate(comp_time_vec.begin(), comp_time_vec.end(), 0.0) / comp_time_vec.size();
     comp_time_pub.publish(totaltime_pub);
-    // ROS_INFO_THROTTLE(0.5, "Temp compute time = %lf, average compute time = %lf", comp_time_temp, totaltime_pub.pose.position.x);
+    // MOTION_PLANNER_LOG_INFO_THROTTLE(0.5, "Temp compute time = %lf, average compute time = %lf", comp_time_temp, totaltime_pub.pose.position.x);
   }
   else
   {
@@ -1983,16 +1985,19 @@ shared(use_avia_pattern, use_vlp32_pattern, use_minicf_pattern, is_360lidar,    
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "pcl_render");
+  motion_planner_log::initialize("pointcloud_render_node", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: point-cloud renderer.");
   ros::NodeHandle nh("~");
 
   nh.param("quadrotor_name", quad_name, std::string("quad_0"));
   nh.param("sensor_type", sensor_type_, std::string("depth"));
   if (!useDepthSensor() && !useLidarSensor())
   {
-    ROS_ERROR("Unsupported sensor_type '%s'. Expected 'depth' or 'lidar'.", sensor_type_.c_str());
+    MOTION_PLANNER_LOG_ERROR("Unsupported sensor_type '%s'. Expected 'depth' or 'lidar'.", sensor_type_.c_str());
     return 1;
   }
-  ROS_INFO("pcl_render_node sensor_type: %s", sensor_type_.c_str());
+  MOTION_PLANNER_LOG_INFO("Ready: sensor_type=%s sensing_rate=%.2f Hz estimation_rate=%.2f Hz horizon=%.2f",
+                         sensor_type_.c_str(), sensing_rate, estimation_rate, sensing_horizon);
   nh.param("is_360lidar", is_360lidar, 1);
   nh.param("sensing_horizon", sensing_horizon, 40.0);
   nh.param("sensing_rate", sensing_rate, 10.0);
@@ -2058,9 +2063,9 @@ int main(int argc, char **argv)
   if (use_uav_extra_model)
   {
     string uav_model_path;
-    uav_model_path = ros::package::getPath("odom_visualization"); //= "/home/mars/catkin_ws2/src/Exploration_sim/octomap_mapping/octomap_server"
+    uav_model_path = ros::package::getPath("scan_planner");
     uav_model_path.append("/meshes/yunque001.pcd");
-    std::cout << "\nFound pkg_path = " << uav_model_path << std::endl;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("Found pkg_path = " << uav_model_path);
 
     pcd_read_status = pcl::io::loadPCDFile<PointType>(uav_model_path, uav_extra_model);
     if (pcd_read_status == -1)
@@ -2086,7 +2091,7 @@ int main(int argc, char **argv)
     drone_drawpoints_num[1] = (uav_size[1] / downsample_res);
     drone_drawpoints_num[2] = (uav_size[2] / downsample_res);
     uav_points_num = drone_drawpoints_num[0] * drone_drawpoints_num[1] * drone_drawpoints_num[2];
-    ROS_INFO("drone_drawpoints_num = %d,%d,%d, Uav points num = %d", drone_drawpoints_num[0], drone_drawpoints_num[1], drone_drawpoints_num[2], uav_points_num);
+  MOTION_PLANNER_LOG_DEBUG("drone_drawpoints_num = %d,%d,%d, uav_points_num = %d", drone_drawpoints_num[0], drone_drawpoints_num[1], drone_drawpoints_num[2], uav_points_num);
   }
 
   // subscribe point cloud

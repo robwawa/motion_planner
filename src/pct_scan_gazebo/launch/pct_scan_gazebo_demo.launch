@@ -13,7 +13,7 @@
        existing planner dynamic-cloud input or replanning behavior. -->
   <arg name="enable_dynamic_perception" default="true" />
   <arg name="conda_env_path"
-       default="$(optenv CONDA_ENV_PATH /media/wa/移动硬盘1/anaconda_env/conda_envs/inspection)" />
+       default="$(optenv CONDA_ENV_PATH /media/wa/移动硬盘/anaconda_env/conda_envs/inspection)" />
 
   <include file="$(find pct_scan_gazebo)/launch/gazebo.launch">
     <arg name="gui" value="$(arg gui)" />

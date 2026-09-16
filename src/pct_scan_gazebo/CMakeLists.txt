@@ -1,8 +1,16 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 2.8.3)
 project(pct_scan_gazebo)
 
-add_compile_options(-std=c++17)
+######################
+### 编译配置
+######################
+set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_CXX_FLAGS "-std=c++17")
+set(CMAKE_CXX_FLAGS_RELEASE "-O2 -Wall -pthread")
 
+######################
+### 依赖包
+######################
 find_package(catkin REQUIRED COMPONENTS
   controller_interface
   gazebo_msgs
@@ -14,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
   pluginlib
   realtime_tools
   roscpp
+  motion_planner_log
   rospy
   sensor_msgs
   std_msgs
@@ -24,13 +33,19 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(gazebo REQUIRED)
 find_package(Protobuf REQUIRED)
 
+######################
+### 消息生成
+######################
 add_message_files(FILES MotorCmd.msg MotorState.msg)
 generate_messages(DEPENDENCIES std_msgs)
 
+######################
+### Catkin 配置
+######################
 catkin_package(
   INCLUDE_DIRS include control_include
   LIBRARIES pct_scan_gazebo_livox pct_scan_gazebo_control pct_scan_gazebo_contact pct_scan_gazebo_draw_force
-  CATKIN_DEPENDS controller_interface gazebo_msgs gazebo_ros geometry_msgs hardware_interface message_runtime nav_msgs pluginlib realtime_tools roscpp rospy sensor_msgs std_msgs tf tf2_ros urdf
+  CATKIN_DEPENDS controller_interface gazebo_msgs gazebo_ros geometry_msgs hardware_interface message_runtime motion_planner_log nav_msgs pluginlib realtime_tools roscpp rospy sensor_msgs std_msgs tf tf2_ros urdf
 )
 
 include_directories(
@@ -41,6 +56,9 @@ include_directories(
 )
 link_directories(${GAZEBO_LIBRARY_DIRS})
 
+######################
+### Gazebo 插件和节点
+######################
 add_library(pct_scan_gazebo_livox SHARED
   livox_src/livox_points_plugin.cpp
   livox_src/livox_ode_multiray_shape.cpp
@@ -63,6 +81,9 @@ target_link_libraries(pct_scan_gazebo_draw_force ${catkin_LIBRARIES} ${GAZEBO_LI
 add_executable(state_from_gazebo state_from_gazebo.cpp)
 target_link_libraries(state_from_gazebo ${catkin_LIBRARIES})
 
+#############
+## 安装规则 ##
+#############
 install(TARGETS
   pct_scan_gazebo_livox
   pct_scan_gazebo_control
@@ -77,7 +98,15 @@ install(TARGETS
 catkin_install_python(PROGRAMS pointcloud2livox.py rl_gazebo.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
-install(DIRECTORY a1_description worlds models
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch)
+install(DIRECTORY a1_description/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/a1_description
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE)
+install(DIRECTORY worlds/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/worlds)
+install(DIRECTORY models/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/models)
 install(FILES unitree_controller_plugins.xml policy_act_inference_stair.pt
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

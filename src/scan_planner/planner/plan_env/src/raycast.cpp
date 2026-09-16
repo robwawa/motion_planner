@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 #include <plan_env/raycast.h>
+#include <motion_planner_log/logging.h>
 
 int signum(int x) {
   return x == 0 ? 0 : x < 0 ? -1 : 1;
@@ -192,7 +193,7 @@ void Raycast(const Eigen::Vector3d& start, const Eigen::Vector3d& end, const Eig
       if (dist > maxDist) return;
 
       if (output->size() > 1500) {
-        std::cerr << "Error, too many racyast voxels." << std::endl;
+        MOTION_PLANNER_LOG_ERROR("Error, too many raycast voxels.");
         throw std::out_of_range("Too many raycast voxels");
       }
     }

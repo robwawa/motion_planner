@@ -9,6 +9,7 @@ from interactive_markers.interactive_marker_server import InteractiveMarkerServe
 from interactive_markers.menu_handler import MenuHandler
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl, Marker
+from motion_planner_log import configure
 
 
 class GoalMarker:
@@ -55,16 +56,16 @@ class GoalMarker:
 
     def validated_goal_callback(self, msg):
         if msg.header.frame_id != self.frame:
-            rospy.logwarn('[goal_interactive_marker] Ignore validated goal in frame %s (expected %s)',
+            logger.warning('Ignore validated goal in frame %s (expected %s)',
                           msg.header.frame_id, self.frame)
             return
         point = msg.pose.position
         if not all(math.isfinite(value) for value in (point.x, point.y, point.z)):
-            rospy.logwarn('[goal_interactive_marker] Ignore non-finite validated goal')
+            logger.warning('Ignore non-finite validated goal')
             return
         self.pose = msg.pose
         self.insert_marker()
-        rospy.loginfo('[goal_interactive_marker] Goal snapped to traversable surface: (%.3f, %.3f, %.3f)',
+        logger.info('Goal snapped to traversable surface: (%.3f, %.3f, %.3f)',
                       point.x, point.y, point.z)
 
     def insert_marker(self):
@@ -160,17 +161,20 @@ class GoalMarker:
 
     def plan_callback(self, feedback):
         if self.pose is None:
+            logger.warning('Cannot plan: robot pose is not available.')
             return
         goal = PoseStamped()
         goal.header.frame_id = self.frame
         goal.header.stamp = rospy.Time.now()
         goal.pose = self.pose
         self.pub.publish(goal)
-        rospy.loginfo('[goal_interactive_marker] Plan: (%.3f, %.3f, %.3f)',
+        logger.info('Plan: (%.3f, %.3f, %.3f)',
                       goal.pose.position.x, goal.pose.position.y, goal.pose.position.z)
 
 
 if __name__ == '__main__':
     rospy.init_node('goal_interactive_marker')
+    logger = configure('goal_interactive_marker')
     GoalMarker()
+    logger.info('Ready: interactive goal marker initialized.')
     rospy.spin()

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <motion_planner_log/logging.h>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -197,7 +198,7 @@ void loadParams(const ros::NodeHandle &private_node)
   if (!std::isfinite(solver_timeout) || solver_timeout < kMinSolverTimeout ||
       solver_timeout > kMaxSolverTimeout)
   {
-    ROS_WARN("[mpc_controller] invalid solver_timeout=%.6f s; using default %.3f s", solver_timeout,
+    MOTION_PLANNER_LOG_WARN("invalid solver_timeout=%.6f s; using default %.3f s", solver_timeout,
              kDefaultSolverTimeout);
     solver_timeout = kDefaultSolverTimeout;
   }
@@ -210,7 +211,7 @@ void bsplineCallback(const scan_planner::BsplineConstPtr &msg)
 {
   if (msg->pos_pts.empty() || msg->knots.empty() || msg->order <= 0)
   {
-    ROS_WARN("[mpc_controller] ignoring invalid B-spline");
+    MOTION_PLANNER_LOG_WARN("ignoring invalid B-spline");
     return;
   }
 
@@ -225,7 +226,7 @@ void bsplineCallback(const scan_planner::BsplineConstPtr &msg)
 
     if (!control_points.col(i).allFinite())
     {
-      ROS_WARN("[mpc_controller] ignoring B-spline with non-finite control point");
+      MOTION_PLANNER_LOG_WARN("ignoring B-spline with non-finite control point");
       return;
     }
   }
@@ -235,7 +236,7 @@ void bsplineCallback(const scan_planner::BsplineConstPtr &msg)
     knots(i) = msg->knots[i];
     if (!std::isfinite(knots(i)))
     {
-      ROS_WARN("[mpc_controller] ignoring B-spline with non-finite knot");
+      MOTION_PLANNER_LOG_WARN("ignoring B-spline with non-finite knot");
       return;
     }
   }
@@ -249,7 +250,7 @@ void bsplineCallback(const scan_planner::BsplineConstPtr &msg)
 
   if (!std::isfinite(next_duration) || (next_have_final_yaw && !std::isfinite(next_terminal_yaw)))
   {
-    ROS_WARN("[mpc_controller] ignoring B-spline with non-finite duration or yaw");
+    MOTION_PLANNER_LOG_WARN("ignoring B-spline with non-finite duration or yaw");
     return;
   }
 
@@ -266,7 +267,7 @@ void bsplineCallback(const scan_planner::BsplineConstPtr &msg)
   invalid_input = false;
   last_u.setZero();
 
-  ROS_INFO("[mpc_controller] received traj_id=%ld duration=%.3f", static_cast<long>(msg->traj_id), duration);
+  MOTION_PLANNER_LOG_INFO("received traj_id=%ld duration=%.3f", static_cast<long>(msg->traj_id), duration);
 }
 
 void odomCallback(const nav_msgs::OdometryConstPtr &msg)
@@ -279,7 +280,7 @@ void odomCallback(const nav_msgs::OdometryConstPtr &msg)
   {
     have_odom = false;
     invalid_input = true;
-    ROS_ERROR_THROTTLE(1.0, "[mpc_controller] rejecting non-finite odometry");
+    MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "rejecting non-finite odometry");
     return;
   }
 
@@ -374,7 +375,7 @@ void timerCallback(const ros::TimerEvent &)
     if (!finiteVector(references[stage]) ||
         (stage < kHorizonSteps && !finiteVector(control_references[stage])))
     {
-      ROS_ERROR_THROTTLE(1.0, "[mpc_controller] non-finite MPC reference; resetting solver");
+      MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "non-finite MPC reference; resetting solver");
       resetSolverAndStop(previous_exec_time);
       return;
     }
@@ -437,6 +438,8 @@ void timerCallback(const ros::TimerEvent &)
                                     "ubx", initial_state);
   if (lower_bound_status != 0 || upper_bound_status != 0)
   {
+    MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "Failed to update MPC initial-state bounds: lower=%d upper=%d; stopping.",
+                                      lower_bound_status, upper_bound_status);
     publishCommand(true, 0.0, 0.0, 0.0);
     return;
   }
@@ -454,8 +457,8 @@ void timerCallback(const ros::TimerEvent &)
   const bool timed_out = status == ACADOS_TIMEOUT || wall_time > solver_timeout;
   if (timed_out)
   {
-    ROS_ERROR_THROTTLE(1.0,
-                       "[mpc_controller] acados solve timeout: status=%d, acados=%.3f ms, "
+    MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0,
+                       "acados solve timeout: status=%d, acados=%.3f ms, "
                        "wall=%.3f ms, limit=%.3f ms",
                        status, solve_time * 1000.0, wall_time * 1000.0, solver_timeout * 1000.0);
     resetSolverAndStop(previous_exec_time);
@@ -464,7 +467,7 @@ void timerCallback(const ros::TimerEvent &)
 
   if (status != ACADOS_SUCCESS && status != ACADOS_MAXITER)
   {
-    ROS_ERROR_THROTTLE(1.0, "[mpc_controller] acados solve failed: %d", status);
+    MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "acados solve failed: %d", status);
     resetSolverAndStop(previous_exec_time);
     return;
   }
@@ -473,17 +476,17 @@ void timerCallback(const ros::TimerEvent &)
   ocp_nlp_out_get(solver->nlp_config, solver->nlp_dims, solver->nlp_out, 0, "u", control);
   if (!std::isfinite(control[0]) || !std::isfinite(control[1]) || !std::isfinite(control[2]))
   {
-    ROS_ERROR_THROTTLE(1.0, "[mpc_controller] acados returned non-finite control");
+    MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "acados returned non-finite control");
     resetSolverAndStop(previous_exec_time);
     return;
   }
 
   if (status == ACADOS_MAXITER)
   {
-    ROS_WARN_THROTTLE(1.0, "[mpc_controller] acados reached max iterations; using current solution");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "acados reached max iterations; using current solution");
   }
 
-  ROS_DEBUG_THROTTLE(1.0, "[mpc_controller] solve %.3f ms (wall %.3f ms), SQP iterations %d",
+  MOTION_PLANNER_LOG_DEBUG_THROTTLE(1.0, "solve %.3f ms (wall %.3f ms), SQP iterations %d",
                      solve_time * 1000.0, wall_time * 1000.0, sqp_iterations);
 
   const Eigen::Vector3d terminal_reference = references[kHorizonSteps];
@@ -518,6 +521,8 @@ void shutdownController()
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "mpc_controller");
+  motion_planner_log::initialize("mpc_controller", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: MPC controller.");
   ros::NodeHandle node;
   ros::NodeHandle private_node("~");
 
@@ -526,7 +531,7 @@ int main(int argc, char **argv)
   solver = scan_planar_mpc_acados_create_capsule();
   if (!solver || scan_planar_mpc_acados_create(solver) != 0)
   {
-    ROS_FATAL("[mpc_controller] failed to create acados solver");
+    MOTION_PLANNER_LOG_ERROR("failed to create acados solver");
     return 1;
   }
   configureSolver();
@@ -537,8 +542,8 @@ int main(int argc, char **argv)
   odom_sub = node.subscribe(body_pose_topic, 20, odomCallback, ros::TransportHints().tcpNoDelay());
   timer = node.createTimer(ros::Duration(0.01), timerCallback);
 
-  ROS_WARN("[mpc_controller] acados solver ready (N=%d, dt=%.3f, timeout=%.3f ms)", kHorizonSteps,
-           kSampleTime, solver_timeout * 1000.0);
+  MOTION_PLANNER_LOG_INFO("Acados solver ready: N=%d dt=%.3f timeout=%.3f ms body_pose_topic=%s", kHorizonSteps,
+           kSampleTime, solver_timeout * 1000.0, body_pose_topic.c_str());
   ros::spin();
 
   shutdownController();

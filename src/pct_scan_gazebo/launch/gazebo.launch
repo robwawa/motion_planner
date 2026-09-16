@@ -10,7 +10,7 @@
   <arg name="model" default="$(find pct_scan_gazebo)/policy_act_inference_stair.pt" />
   <arg name="launch_rl" default="true" />
   <arg name="conda_env_path"
-       default="$(optenv CONDA_ENV_PATH /media/wa/移动硬盘1/anaconda_env/conda_envs/inspection)" />
+       default="$(optenv CONDA_ENV_PATH /media/wa/移动硬盘/anaconda_env/conda_envs/inspection)" />
   <arg name="python_launch_prefix"
        default="env PYTHONPATH=$(optenv PYTHONPATH) $(arg conda_env_path)/bin/python" />
 

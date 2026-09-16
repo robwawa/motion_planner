@@ -1,4 +1,5 @@
 #include <geometry_msgs/Pose.h>
+#include <motion_planner_log/logging.h>
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
@@ -35,7 +36,7 @@ void publishWaypoints(const geometry_msgs::PoseStamped& goal) {
 
 void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
   if (msg->pose.position.z <= -0.1) {
-    ROS_WARN("[waypoint_generator] invalid goal.");
+    MOTION_PLANNER_LOG_WARN("invalid goal.");
     return;
   }
 
@@ -44,6 +45,8 @@ void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "waypoint_generator");
+  motion_planner_log::initialize("waypoint_generator", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: waypoint generator.");
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
 

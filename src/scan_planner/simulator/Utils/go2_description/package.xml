@@ -1,4 +1,4 @@
-<package format="2">
+<package>
   <name>go2_description</name>
   <version>1.0.0</version>
   <description>
@@ -10,10 +10,14 @@ for go2_description robot</p>
   <maintainer email="TODO@email.com" />
   <license>BSD</license>
   <buildtool_depend>catkin</buildtool_depend>
-  <depend>roslaunch</depend>
-  <depend>robot_state_publisher</depend>
-  <depend>rviz</depend>
-  <depend>joint_state_publisher</depend>
+  <build_depend>roslaunch</build_depend>
+  <run_depend>roslaunch</run_depend>
+  <build_depend>robot_state_publisher</build_depend>
+  <run_depend>robot_state_publisher</run_depend>
+  <build_depend>rviz</build_depend>
+  <run_depend>rviz</run_depend>
+  <build_depend>joint_state_publisher</build_depend>
+  <run_depend>joint_state_publisher</run_depend>
   <export>
     <architecture_independent />
   </export>

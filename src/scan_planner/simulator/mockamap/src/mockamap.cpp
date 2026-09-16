@@ -1,4 +1,5 @@
 #include <ros/ros.h>
+#include <motion_planner_log/logging.h>
 #include <sensor_msgs/PointCloud2.h>
 
 #include <algorithm>
@@ -53,7 +54,7 @@ optimizeMap(mocka::Maps::BasicInfo& in)
 
   pcl::toROSMsg(*in.cloud, *in.output);
   in.output->header.frame_id = "world";
-  ROS_INFO("finish: number of points after optimization %d", in.cloud->width);
+  MOTION_PLANNER_LOG_DEBUG("Map optimization finished: points=%d", in.cloud->width);
   delete temp;
   return;
 }
@@ -62,6 +63,8 @@ int
 main(int argc, char** argv)
 {
   ros::init(argc, argv, "mockamap");
+  motion_planner_log::initialize("mockamap", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: mock map generator.");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");
 
@@ -90,6 +93,8 @@ main(int argc, char** argv)
   nh_private.param("z_length", sizeZ, 10);
 
   nh_private.param("type", type, 1);
+  MOTION_PLANNER_LOG_INFO("Configuration: seed=%d size=(%d,%d,%d) resolution=%.3f update_rate=%.2f Hz type=%d",
+                         seed, sizeX, sizeY, sizeZ, scale, update_freq, type);
 
   scale = 1 / scale;
   sizeX = sizeX * scale;

@@ -1,19 +1,17 @@
 #include <bspline_opt/gradient_descent_optimizer.h>
-
-#define RESET "\033[0m"
-#define RED "\033[31m"
+#include <motion_planner_log/logging.h>
 
 GradientDescentOptimizer::RESULT
 GradientDescentOptimizer::optimize(Eigen::VectorXd &x_init_optimal, double &opt_f)
 {
     if (min_grad_ < 1e-10)
     {
-        cout << RED << "min_grad_ is invalid:" << min_grad_ << RESET << endl;
+        MOTION_PLANNER_LOG_ERROR("min_grad_ is invalid: %.6g", min_grad_);
         return FAILED;
     }
     if (iter_limit_ <= 2)
     {
-        cout << RED << "iter_limit_ is invalid:" << iter_limit_ << RESET << endl;
+        MOTION_PLANNER_LOG_ERROR("iter_limit_ is invalid: %d", iter_limit_);
         return FAILED;
     }
 
@@ -47,7 +45,7 @@ GradientDescentOptimizer::optimize(Eigen::VectorXd &x_init_optimal, double &opt_
         double alpha = s.dot(y) / y.dot(y);
         if (isnan(alpha) || isinf(alpha))
         {
-            cout << RED << "step size invalid! alpha=" << alpha << RESET << endl;
+            MOTION_PLANNER_LOG_ERROR("Gradient descent step size is invalid: alpha=%.6g", alpha);
             return FAILED;
         }
 

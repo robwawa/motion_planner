@@ -1,4 +1,5 @@
 #include <pcl/point_cloud.h>
+#include <motion_planner_log/logging.h>
 #include <pcl/point_types.h>
 #include <pcl/common/transforms.h>
 #include <pcl/io/pcd_io.h>
@@ -293,7 +294,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
     window = glfwCreateWindow(width, height, "Opengl_sim", NULL, NULL);
     if (window == NULL)
     {
-        std::cout << "Failed to create GLFW window" << std::endl;
+        MOTION_PLANNER_LOG_ERROR("Failed to create GLFW window");
         glfwTerminate();
         return ;
     }
@@ -309,7 +310,7 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
     // ---------------------------------------
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        std::cout << "Failed to initialize GLAD" << std::endl;
+        MOTION_PLANNER_LOG_ERROR("Failed to initialize GLAD");
         return ;
     }
 
@@ -330,13 +331,13 @@ void opengl_pointcloud_render::read_pointcloud_fromfile(std::string map_filename
     // current_path += "/kong_ws/src/Exploration_sim/uav_simulator/local_sensing/include/";
     std::string root_dir = ROOT_DIR;
     current_path = root_dir + "include/";
-    printf("Current Path: %s\n",current_path.c_str());
+        MOTION_PLANNER_LOG_DEBUG("Current shader path: %s", current_path.c_str());
     std::string vertex_path = current_path + "360camera.vs";
     std::string fragment_path = current_path + "camera.fs";
     Shader inputshader(vertex_path.c_str(), fragment_path.c_str());
     ourShader = inputshader;
 
-    std::cout << "shader path = " << vertex_path << std::endl;;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("shader path = " << vertex_path);
 
     // std::cout << "You Pushed a button, now open file: " << a_string.Get() << endl;
     load_pcd_file( map_filename ,cloud_color_mesh);
@@ -470,7 +471,7 @@ void opengl_pointcloud_render::read_pointcloud_fromcloud(const pcl::PointCloud<P
     window = glfwCreateWindow(width, height, "Opengl_sim", NULL, NULL);
     if (window == NULL)
     {
-        std::cout << "Failed to create GLFW window" << std::endl;
+        MOTION_PLANNER_LOG_ERROR("Failed to create GLFW window");
         glfwTerminate();
         return ;
     }
@@ -483,7 +484,7 @@ void opengl_pointcloud_render::read_pointcloud_fromcloud(const pcl::PointCloud<P
     // ---------------------------------------
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        std::cout << "Failed to initialize GLAD" << std::endl;
+        MOTION_PLANNER_LOG_ERROR("Failed to initialize GLAD");
         return ;
     }
 
@@ -495,13 +496,13 @@ void opengl_pointcloud_render::read_pointcloud_fromcloud(const pcl::PointCloud<P
 
     std::string root_dir = ROOT_DIR;
     std::string current_path = root_dir + "include/";
-    printf("Current Path: %s\n",current_path.c_str());
+        MOTION_PLANNER_LOG_DEBUG("Current shader path: %s", current_path.c_str());
     std::string vertex_path = current_path + "360camera.vs";
     std::string fragment_path = current_path + "camera.fs";
     Shader inputshader(vertex_path.c_str(), fragment_path.c_str());
     ourShader = inputshader;
 
-    std::cout << "shader path = " << vertex_path << std::endl;;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("shader path = " << vertex_path);
 
     cloud_color_mesh = input_cloud;
     init_pointcloud_data();
@@ -643,7 +644,7 @@ void opengl_pointcloud_render::render_pointcloud(pcl::PointCloud<PointType>::Ptr
             int x = (int(-round(-62050.63 * t_i + 3.11 * cos(314159.2 * t_i) * sin(628.318 * 2 * t_i))) % 360) / polar_res;
             int y = round(25.5 * cos(20 * PI * t_i) + 4 * cos(2 * PI / 0.006 * t_i) * cos(10000 * PI * t_i) + 22.5) / polar_res + round(0.5 * height);
 
-            // ROS_INFO("X = %d, Y = %d",x,y);
+            // MOTION_PLANNER_LOG_INFO("X = %d, Y = %d",x,y);
             if (x > (width - 1))
             {
                 x = (width - 1);
@@ -1674,7 +1675,7 @@ void opengl_pointcloud_render::test_vector_insert()
         system_clock::time_point t2 = system_clock::now();
         auto dur = t2 - t1;
         duration<double> second(dur);
-        std::cout << "One insert cost " << second.count() << " seconds\n";
+        MOTION_PLANNER_LOG_DEBUG_STREAM("One insert cost " << second.count() << " seconds");
 }
 
 int if_first_call = 1;
@@ -1686,10 +1687,10 @@ void opengl_pointcloud_render::get_Rendering_info()
         return ;
     }
     if_first_call = 0;
-    printf("OpenGL version supported by this platform (%s): \n", glGetString(GL_VERSION));
-    printf("GL_VERSION: %s\r\n", glGetString(GL_VERSION));
-    printf("GL_VENDOR: %s\r\n", glGetString(GL_VENDOR));
-    printf("GL_RENDER: %s\r\n", glGetString(GL_RENDER));
+    MOTION_PLANNER_LOG_INFO("OpenGL runtime: version=%s vendor=%s renderer=%s",
+                            reinterpret_cast<const char*>(glGetString(GL_VERSION)),
+                            reinterpret_cast<const char*>(glGetString(GL_VENDOR)),
+                            reinterpret_cast<const char*>(glGetString(GL_RENDER)));
     // printf("GL_EXTENSIONS: %s \r\n",  glGetString(GL_EXTENSIONS));
     //  GLint kb;
     // glGetIntegerv(GL_NVX_gpu_memory_info, &kb);
@@ -2375,7 +2376,7 @@ int opengl_pointcloud_render::count_fov_point_num(pcl::PointCloud< PointType > c
     system_clock::time_point t2 = system_clock::now();
         auto dur = t2 - t1;
         duration<double> second(dur);
-        std::cout << "One search in kdtree cost " << second.count() << " seconds\n";
+        MOTION_PLANNER_LOG_DEBUG_STREAM("One search in kdtree cost " << second.count() << " seconds");
 }
 
 void opengl_pointcloud_render::new_gaussian_interline(cv::Mat  & depth_mat)

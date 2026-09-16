@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <motion_planner_log/logging.h>
 #include <cmath>
 #include <string>
 
@@ -118,6 +119,8 @@ void simCallback(const ros::TimerEvent &)
   double wz = vyaw_cmd;
   if ((now - last_cmd_time).toSec() > cmd_timeout)
   {
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "Velocity command timed out: elapsed=%.3f s timeout=%.3f s; stopping simulation.",
+                                      (now - last_cmd_time).toSec(), cmd_timeout);
     vx = 0.0;
     vy = 0.0;
     wz = 0.0;
@@ -139,6 +142,8 @@ void simCallback(const ros::TimerEvent &)
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "go2_kinematic_sim");
+  motion_planner_log::initialize("go2_kinematic_sim", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: Go2 kinematic simulator.");
   ros::NodeHandle node;
   ros::NodeHandle nh("~");
 
@@ -152,7 +157,7 @@ int main(int argc, char **argv)
   loadParamWithFallback(nh, "max_vyaw", "/closed_loop_controller/max_vyaw", max_vyaw, kMaxVYawLimit);
   if (max_vyaw > kMaxVYawLimit)
   {
-    ROS_WARN("[Go2 kinematic sim] cap max_vyaw %.3f to %.3f rad/s.", max_vyaw, kMaxVYawLimit);
+    MOTION_PLANNER_LOG_WARN("cap max_vyaw %.3f to %.3f rad/s.", max_vyaw, kMaxVYawLimit);
     max_vyaw = kMaxVYawLimit;
   }
   nh.param("cmd_timeout", cmd_timeout, 0.3);
@@ -171,7 +176,8 @@ int main(int argc, char **argv)
   last_sim_time = ros::Time::now();
   sim_timer = node.createTimer(ros::Duration(1.0 / sim_rate), simCallback);
 
-  ROS_WARN("[Go2 kinematic sim] ready.");
+  MOTION_PLANNER_LOG_INFO("Ready: body_pose_topic=%s frame=%s child_frame=%s sim_rate=%.1f Hz",
+                         body_pose_topic.c_str(), frame_id.c_str(), child_frame_id.c_str(), sim_rate);
 
   ros::spin();
   return 0;

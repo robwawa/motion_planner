@@ -4,6 +4,7 @@ Use of this source code is governed by the MPL-2.0 license, see LICENSE.
 ************************************************************************/
 
 // #include "unitree_legged_control/joint_controller.h"
+#include <motion_planner_log/logging.h>
 #include "joint_controller.h"
 #include <pluginlib/class_list_macros.h>
 
@@ -54,7 +55,7 @@ namespace unitree_legged_control
         sensor_torque = 0;
         name_space = n.getNamespace();
         if (!n.getParam("joint", joint_name)){
-            ROS_ERROR("No joint given in namespace: '%s')", n.getNamespace().c_str());
+            MOTION_PLANNER_LOG_ERROR("No joint given in namespace: '%s')", n.getNamespace().c_str());
             return false;
         }
         
@@ -69,12 +70,12 @@ namespace unitree_legged_control
 
         urdf::Model urdf; // Get URDF info about joint
         if (!urdf.initParamWithNodeHandle("robot_description", n)){
-            ROS_ERROR("Failed to parse urdf file");
+            MOTION_PLANNER_LOG_ERROR("Failed to parse urdf file");
             return false;
         }
         joint_urdf = urdf.getJoint(joint_name);
         if (!joint_urdf){
-            ROS_ERROR("Could not find joint '%s' in urdf", joint_name.c_str());
+            MOTION_PLANNER_LOG_ERROR("Could not find joint '%s' in urdf", joint_name.c_str());
             return false;
         }
         if(joint_name == "FR_hip_joint" || joint_name == "FL_hip_joint" || joint_name == "RR_hip_joint" || joint_name == "RL_hip_joint"){

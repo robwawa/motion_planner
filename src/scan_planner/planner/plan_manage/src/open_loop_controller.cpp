@@ -1,4 +1,5 @@
 #include "bspline_opt/uniform_bspline.h"
+#include <motion_planner_log/logging.h>
 #include "scan_planner/Bspline.h"
 
 #include <Eigen/Eigen>
@@ -56,7 +57,8 @@ bool parseBspline(const scan_planner::BsplineConstPtr& msg, UniformBspline& pos_
 {
   if (msg->pos_pts.empty() || msg->knots.empty() || msg->order <= 0)
   {
-    ROS_WARN("[open_loop_controller] Ignore invalid bspline.");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "Reject invalid B-spline: points=%zu knots=%zu order=%d.",
+                                     msg->pos_pts.size(), msg->knots.size(), msg->order);
     return false;
   }
 
@@ -93,7 +95,7 @@ void bsplineCallback(const scan_planner::BsplineConstPtr& msg)
   traj_duration = traj[0].getTimeSum();
   receive_traj = true;
 
-  ROS_INFO("[open_loop_controller] Receive traj %d, duration %.3fs.", traj_id, traj_duration);
+  MOTION_PLANNER_LOG_INFO("Receive traj %d, duration %.3fs.", traj_id, traj_duration);
 }
 
 void publishOdom(const ros::TimerEvent&)
@@ -102,6 +104,7 @@ void publishOdom(const ros::TimerEvent&)
 
   if (!receive_traj)
   {
+    MOTION_PLANNER_LOG_DEBUG_THROTTLE(5.0, "Waiting for a B-spline trajectory.");
     publishState(now, current_pos, current_vel, last_yaw, 0.0);
     return;
   }
@@ -110,6 +113,7 @@ void publishOdom(const ros::TimerEvent&)
 
   if (elapsed < 0.0)
   {
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "Trajectory timestamp is ahead of current time: elapsed=%.3f s.", elapsed);
     publishState(now, current_pos, current_vel, last_yaw, 0.0);
     return;
   }
@@ -145,6 +149,8 @@ void publishOdom(const ros::TimerEvent&)
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "open_loop_controller");
+  motion_planner_log::initialize("open_loop_controller", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: open-loop controller.");
 
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
@@ -175,7 +181,7 @@ int main(int argc, char** argv)
 
   ros::Timer timer = nh.createTimer(ros::Duration(1.0 / publish_rate), publishOdom);
 
-  ROS_WARN("[open_loop_controller] ready. bspline: %s, odom: %s", bspline_topic.c_str(),
+  MOTION_PLANNER_LOG_INFO("Ready: bspline_topic=%s odom_topic=%s", bspline_topic.c_str(),
            body_pose_topic.c_str());
 
   ros::spin();

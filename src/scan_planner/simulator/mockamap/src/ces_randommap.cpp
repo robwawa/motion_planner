@@ -1,4 +1,5 @@
 #include <iostream>
+#include <motion_planner_log/logging.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -148,8 +149,8 @@ fixedMapGenerate()
   cloudMap.height   = 1;
   cloudMap.is_dense = true;
 
-  ROS_WARN("Finished generate random map ");
-  cout << cloudMap.size() << endl;
+  MOTION_PLANNER_LOG_INFO("Random map generation finished.");
+  MOTION_PLANNER_LOG_DEBUG("Generated map point count=%zu.", cloudMap.size());
   kdtreeLocalMap.setInputCloud(cloudMap.makeShared());
   map_ok = true;
 }
@@ -195,7 +196,7 @@ publishAllPoints()
     globalMap_pcd.header.frame_id = kFrameIdNs_;
     _global_map_pub.publish(globalMap_pcd);
     frequence_division_global = 40;
-    ROS_ERROR("[SERVER]Publish one global map");
+  MOTION_PLANNER_LOG_INFO("Publishing global map.");
   }
 }
 
@@ -227,7 +228,7 @@ pubSensedPoints()
   }
   else
   {
-    // ROS_ERROR("[Map server] No obstacles .");
+    // MOTION_PLANNER_LOG_ERROR("No obstacles .");
     // cout<<searchPoint.x<<" , "<<searchPoint.y<<" , "<<searchPoint.z<<endl;
     // return;
   }
@@ -259,6 +260,6 @@ pubSensedPoints()
     globalMap_pcd.header.frame_id = kFrameIdNs_;
     _global_map_pub.publish(globalMap_pcd);
     frequence_division_global = 40;
-    ROS_INFO("[SERVER]Publish one global map");
+  MOTION_PLANNER_LOG_INFO_ONCE("Global map publisher is active.");
   }
 }

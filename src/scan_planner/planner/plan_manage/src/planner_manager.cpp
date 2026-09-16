@@ -1,4 +1,5 @@
 // #include <fstream>
+#include <motion_planner_log/logging.h>
 #include <plan_manage/planner_manager.h>
 #include <thread>
 
@@ -85,7 +86,7 @@ namespace scan_planner
           points, start_progress, projection_tolerance, start_z, target_z);
       if (std::fabs(result.final_profile_z - target_z) > projection_tolerance)
       {
-        ROS_WARN_THROTTLE(1.0,
+        MOTION_PLANNER_LOG_WARN_THROTTLE(1.0,
                           "[ReplanZDiag] Reference Z endpoint mismatch: segment=%zu, progress=%.3f, "
                           "profile_z=%.3f, target_z=%.3f, delta=%.3f",
                           result.final_segment_index, result.final_progress,
@@ -98,7 +99,7 @@ namespace scan_planner
 
   SCANPlannerManager::SCANPlannerManager() {}
 
-  SCANPlannerManager::~SCANPlannerManager() { std::cout << "des manager" << std::endl; }
+  SCANPlannerManager::~SCANPlannerManager() { MOTION_PLANNER_LOG_DEBUG("destroy planner manager"); }
 
   void SCANPlannerManager::initPlanModules(ros::NodeHandle &nh, PlanningVisualization::Ptr vis)
   {
@@ -124,6 +125,9 @@ namespace scan_planner
     bspline_optimizer_rebound_->a_star_->initGridMap(grid_map_, Eigen::Vector3i(100, 100, 100));
 
     visualization_ = vis;
+    MOTION_PLANNER_LOG_INFO("Planner modules ready: max_vel=%.3f max_acc=%.3f max_jerk=%.3f ctrl_pt_dist=%.3f horizon=%.3f",
+                            pp_.max_vel_, pp_.max_acc_, pp_.max_jerk_, pp_.ctrl_pt_dist,
+                            pp_.planning_horizon_);
   }
 
   // !SECTION
@@ -139,15 +143,14 @@ namespace scan_planner
   {
 
     static int count = 0;
-    std::cout << endl
-              << "[rebo replan]: -------------------------------------" << count++ << std::endl;
-    cout.precision(3);
-    cout << "start: " << start_pt.transpose() << ", " << start_vel.transpose() << "\ngoal:" << local_target_pt.transpose() << ", " << local_target_vel.transpose()
-         << endl;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("rebound replan " << count++ << ": start="
+                                    << start_pt.transpose() << ", vel=" << start_vel.transpose()
+                                    << "; goal=" << local_target_pt.transpose() << ", vel="
+                                    << local_target_vel.transpose());
 
     if ((start_pt - local_target_pt).norm() < 0.2)
     {
-      cout << "Close to goal" << endl;
+      MOTION_PLANNER_LOG_DEBUG("rebound replan target is already close");
       continuous_failures_count_++;
       return false;
     }
@@ -259,7 +262,7 @@ namespace scan_planner
             }
             else
             {
-              ROS_ERROR("pseudo_arc_length is empty, return!");
+              MOTION_PLANNER_LOG_ERROR("Cannot build replan input: pseudo arc length is empty.");
               continuous_failures_count_++;
               return false;
             }
@@ -320,7 +323,7 @@ namespace scan_planner
       point_set_min_z = std::min(point_set_min_z, point.z());
       point_set_max_z = std::max(point_set_max_z, point.z());
     }
-    ROS_DEBUG_THROTTLE(1.0,
+    MOTION_PLANNER_LOG_DEBUG_THROTTLE(1.0,
                        "[ReplanZDiag] B-spline input: ref_z=%s, point_z=[%.3f, %.3f], "
                        "start_z=%.3f, target_z=%.3f, derivative_z=[vel_start=%.3f, vel_end=%.3f, acc_start=%.3f, acc_end=%.3f], ts=%.3f",
                        z_reference_profile != nullptr && z_reference_profile->valid() ? "profile" : "linear",
@@ -347,7 +350,7 @@ namespace scan_planner
 
     /*** STEP 2: OPTIMIZE ***/
     bool flag_step_1_success = bspline_optimizer_rebound_->BsplineOptimizeTrajRebound(ctrl_pts, ts);
-    cout << "first_optimize_step_success=" << flag_step_1_success << endl;
+    MOTION_PLANNER_LOG_DEBUG("First optimize step success=%d", flag_step_1_success ? 1 : 0);
     if (!flag_step_1_success)
     {
       // visualization_->displayOptimalList( ctrl_pts, vis_id );
@@ -367,7 +370,7 @@ namespace scan_planner
     bool flag_step_2_success = true;
     if (!pos.checkFeasibility(ratio, false))
     {
-      cout << "Need to reallocate time." << endl;
+      MOTION_PLANNER_LOG_DEBUG("Trajectory feasibility requires time reallocation.");
 
       Eigen::MatrixXd optimal_control_points;
       flag_step_2_success = refineTrajAlgo(pos, start_end_derivatives, ratio, ts, optimal_control_points);
@@ -377,7 +380,7 @@ namespace scan_planner
 
     if (!flag_step_2_success || !checkDynamicFeasibility(pos))
     {
-      printf("\033[34mThis refined trajectory is unsafe or dynamically infeasible. Skip publishing it.\n\033[0m");
+      MOTION_PLANNER_LOG_WARN("Refined trajectory rejected: unsafe or dynamically infeasible; skip publishing.");
       continuous_failures_count_++;
       return false;
     }
@@ -387,7 +390,9 @@ namespace scan_planner
     // save planned results
     updateTrajInfo(pos, ros::Time::now());
 
-    cout << "total time:\033[42m" << (t_init + t_opt + t_refine).toSec() << "\033[0m,optimize:" << (t_init + t_opt).toSec() << ",refine:" << t_refine.toSec() << endl;
+    MOTION_PLANNER_LOG_DEBUG("Trajectory timing: total=%.6f s optimize=%.6f s refine=%.6f s",
+                             (t_init + t_opt + t_refine).toSec(), (t_init + t_opt).toSec(),
+                             t_refine.toSec());
 
     // success. YoY
     continuous_failures_count_ = 0;
@@ -453,7 +458,7 @@ namespace scan_planner
     braking_traj.setPhysicalLimits(pp_.max_vel_, pp_.max_acc_, pp_.feasibility_tolerance_);
     if (!checkDynamicFeasibility(braking_traj))
     {
-      ROS_WARN("[direction-change brake] Generated braking trajectory is dynamically infeasible.");
+      MOTION_PLANNER_LOG_WARN("Generated braking trajectory is dynamically infeasible.");
       return false;
     }
 
@@ -497,7 +502,7 @@ namespace scan_planner
       PolynomialTraj gl_traj;
       if (!makePiecewiseLinearTrajectory(points, pp_.max_vel_, gl_traj))
       {
-        ROS_ERROR("Unable to generate piecewise-linear reference trajectory from waypoints.");
+        MOTION_PLANNER_LOG_ERROR("Unable to generate piecewise-linear reference trajectory from waypoints.");
         return false;
       }
 
@@ -681,7 +686,7 @@ namespace scan_planner
       Eigen::Vector3d vel = vel_traj.evaluateDeBoorT(tc);
       if (vel.norm() > vel_limit)
       {
-        ROS_WARN_STREAM("Dynamic feasibility check failed: velocity limit exceeded at t="
+        MOTION_PLANNER_LOG_WARN_STREAM("Dynamic feasibility check failed: velocity limit exceeded at t="
                         << tc << ", |v|=" << vel.norm() << " > " << vel_limit);
         return false;
       }
@@ -689,7 +694,7 @@ namespace scan_planner
       Eigen::Vector3d acc = acc_traj.evaluateDeBoorT(tc);
       if (acc.norm() > acc_limit)
       {
-        ROS_WARN_STREAM("Dynamic feasibility check failed: acceleration limit exceeded at t="
+        MOTION_PLANNER_LOG_WARN_STREAM("Dynamic feasibility check failed: acceleration limit exceeded at t="
                         << tc << ", |a|=" << acc.norm() << " > " << acc_limit);
         return false;
       }

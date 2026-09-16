@@ -1,4 +1,5 @@
 #include "maps.hpp"
+#include <motion_planner_log/logging.h>
 
 #include <algorithm>
 #include <iostream>
@@ -116,8 +117,8 @@ Maps::pcl2ros()
 {
   pcl::toROSMsg(*info.cloud, *info.output);
   info.output->header.frame_id = "world";
-  ROS_INFO("finish: infill %lf%%",
-           info.cloud->width / (1.0 * info.sizeX * info.sizeY * info.sizeZ));
+  MOTION_PLANNER_LOG_DEBUG("Map fill computation finished: fill_ratio=%.6f",
+                           info.cloud->width / (1.0 * info.sizeX * info.sizeY * info.sizeZ));
 }
 
 void
@@ -163,7 +164,7 @@ Maps::perlin3D()
   std::sort(v->begin(), v->end());
   int    tpos = info.cloud->width * (1 - fill);
   double tmp  = v->at(tpos);
-  ROS_INFO("threshold: %lf", tmp);
+  MOTION_PLANNER_LOG_DEBUG("threshold: %lf", tmp);
 
   int pos = 0;
   for (int i = 0; i < info.sizeX; ++i)
@@ -194,7 +195,7 @@ Maps::perlin3D()
     }
   }
   info.cloud->width = pos;
-  ROS_INFO("the number of points before optimization is %d", info.cloud->width);
+  MOTION_PLANNER_LOG_DEBUG("the number of points before optimization is %d", info.cloud->width);
   info.cloud->points.resize(info.cloud->width * info.cloud->height);
   pcl2ros();
 }
@@ -202,7 +203,7 @@ Maps::perlin3D()
 void
 Maps::recursiveDivision(int xl, int xh, int yl, int yh, Eigen::MatrixXi& maze)
 {
-  ROS_INFO(
+  MOTION_PLANNER_LOG_DEBUG(
     "generating maze with width %d , height %d", xh - xl + 1, yh - yl + 1);
 
   if (xl < xh - 3 && yl < yh - 3)
@@ -211,7 +212,7 @@ Maps::recursiveDivision(int xl, int xh, int yl, int yh, Eigen::MatrixXi& maze)
     bool valid = false; // used to judge whether the wall selection is valid
     int  xm    = 0;
     int  ym    = 0;
-    ROS_INFO("entered 5*5 mode");
+    MOTION_PLANNER_LOG_DEBUG("entered 5*5 mode");
     while (valid == false)
     {
       xm = (std::rand() % (xh - xl - 1) + xl +
@@ -328,16 +329,16 @@ Maps::recursiveDivision(int xl, int xh, int yl, int yh, Eigen::MatrixXi& maze)
       }
     }
 
-    std::cout << maze << std::endl;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("maze state:\n" << maze);
     recursiveDivision(xl, xm - 1, yl, ym - 1, maze);
     recursiveDivision(xm + 1, xh, yl, ym - 1, maze);
     recursiveDivision(xl, xm - 1, ym + 1, yh, maze);
     recursiveDivision(xm + 1, xh, ym + 1, yh, maze);
 
-    ROS_INFO("finished generating maze with width %d , height %d",
+    MOTION_PLANNER_LOG_DEBUG("finished generating maze with width %d , height %d",
              xh - xl + 1,
              yh - yl + 1);
-    std::cout << maze << std::endl;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("maze state:\n" << maze);
     return;
   } // when the remaining area is larger than or equal to 5*5
 
@@ -432,18 +433,18 @@ Maps::recursiveDivision(int xl, int xh, int yl, int yh, Eigen::MatrixXi& maze)
         maze(xm, d4) = 0;
         break;
     } // the doors are opened for this cell
-    std::cout << maze << std::endl;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("maze state:\n" << maze);
 
-    ROS_INFO("finished generating maze with width %d , height %d",
+    MOTION_PLANNER_LOG_DEBUG("finished generating maze with width %d , height %d",
              xh - xl + 1,
              yh - yl + 1);
-    std::cout << maze << std::endl;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("maze state:\n" << maze);
     return;
   }
 
   else if (xl < xh - 1 && yl < yh - 2)
   { // the case of 3*4+
-    ROS_INFO("entered 3*4+ mode");
+    MOTION_PLANNER_LOG_DEBUG("entered 3*4+ mode");
     int doorcount = 0;
     int ym        = 0;
     for (int i = yl; i <= yh; i++)
@@ -475,7 +476,7 @@ Maps::recursiveDivision(int xl, int xh, int yl, int yh, Eigen::MatrixXi& maze)
   //
   else if (xl < xh - 2 && yl < yh - 1)
   { // the case of 4+*3
-    ROS_INFO("entered 4+*3 mode");
+    MOTION_PLANNER_LOG_DEBUG("entered 4+*3 mode");
     int doorcount = 0;
     int xm        = 0;
     for (int i = xl; i <= xh; i++)
@@ -512,7 +513,7 @@ Maps::recursiveDivision(int xl, int xh, int yl, int yh, Eigen::MatrixXi& maze)
   }
   else
   {
-    ROS_INFO("finished generating maze with width %d , height %d",
+    MOTION_PLANNER_LOG_DEBUG("finished generating maze with width %d , height %d",
              xh - xl + 1,
              yh - yl + 1);
     return;
@@ -538,7 +539,7 @@ Maps::recursizeDivisionMaze(Eigen::MatrixXi& maze)
   else
     return;
 
-  ROS_INFO("debug %d %d %d %d", sx, sy, px, py);
+  MOTION_PLANNER_LOG_DEBUG("debug %d %d %d %d", sx, sy, px, py);
 
   int x1, x2, y1, y2;
 
@@ -561,7 +562,7 @@ Maps::recursizeDivisionMaze(Eigen::MatrixXi& maze)
     y2 = (std::rand() % (sy - py - 3) + py + 1);
   else
     y2 = py + 1;
-  ROS_INFO("%d %d %d %d", x1, x2, y1, y2);
+  MOTION_PLANNER_LOG_DEBUG("%d %d %d %d", x1, x2, y1, y2);
 
   if (px != 1 && px != (sx - 2))
   {
@@ -665,7 +666,7 @@ Maps::maze2D()
     }
   }
 
-  std::cout << maze << std::endl;
+  MOTION_PLANNER_LOG_DEBUG_STREAM("maze state:\n" << maze);
 
   for (int i = 0; i < mx; ++i)
   {
@@ -810,7 +811,7 @@ Maps::Maze3DGen()
   info.nh_private->param("connectivity", connectivity, 0.5);
   info.nh_private->param("nodeRad", nodeRad, 3);
   info.nh_private->param("roadRad", roadRad, 2);
-  ROS_INFO("received parameters : numNodes: %d connectivity: "
+  MOTION_PLANNER_LOG_INFO("received parameters : numNodes: %d connectivity: "
            "%f nodeRad: %d roadRad: %d",
            numNodes,
            connectivity,
@@ -830,7 +831,7 @@ Maps::Maze3DGen()
     double rz = std::rand() / RAND_MAX +
                 (std::rand() % info.sizeZ) / info.scale -
                 info.sizeZ / (2 * info.scale);
-    ROS_INFO("point: x: %f , y: %f , z: %f", rx, ry, rz);
+    MOTION_PLANNER_LOG_DEBUG("point: x: %f , y: %f , z: %f", rx, ry, rz);
 
     pcl::PointXYZ pt_random;
     pt_random.x = rx;
@@ -910,7 +911,7 @@ Maps::Maze3DGen()
 
   info.cloud->width  = info.cloud->points.size();
   info.cloud->height = 1;
-  ROS_INFO("the number of points before optimization is %d", info.cloud->width);
+  MOTION_PLANNER_LOG_DEBUG("the number of points before optimization is %d", info.cloud->width);
   info.cloud->points.resize(info.cloud->width * info.cloud->height);
   pcl2ros();
 }

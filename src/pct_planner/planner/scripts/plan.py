@@ -4,6 +4,7 @@ import numpy as np
 
 import rospy
 from nav_msgs.msg import Path
+from motion_planner_log import configure
 
 from utils import *
 from planner_wrapper import TomogramPlanner
@@ -34,11 +35,12 @@ def pct_plan():
     traj_3d = planner.plan(start_pos, end_pos)
     if traj_3d is not None:
         path_pub.publish(traj2ros(traj_3d))
-        print("Trajectory published")
+        logger.info("Trajectory published: points=%d", len(traj_3d))
 
 
 if __name__ == '__main__':
     rospy.init_node("pct_planner", anonymous=True)
+    logger = configure("pct_planner_plan")
 
     pct_plan()
 

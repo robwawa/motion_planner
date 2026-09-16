@@ -2,6 +2,7 @@
 #define _DYN_A_STAR_H_
 
 #include <iostream>
+#include <motion_planner_log/logging.h>
 #include <ros/ros.h>
 #include <ros/console.h>
 #include <Eigen/Eigen>
@@ -113,7 +114,7 @@ inline bool AStar::Coord2Index(const Eigen::Vector3d &pt, Eigen::Vector3i &idx) 
 
 	if (idx(0) < 0 || idx(0) >= POOL_SIZE_(0) || idx(1) < 0 || idx(1) >= POOL_SIZE_(1) || idx(2) < 0 || idx(2) >= POOL_SIZE_(2))
 	{
-		ROS_ERROR("Ran out of pool, index=%d %d %d", idx(0), idx(1), idx(2));
+		MOTION_PLANNER_LOG_ERROR("Ran out of pool, index=%d %d %d", idx(0), idx(1), idx(2));
 		return false;
 	}
 

@@ -11,6 +11,7 @@ from std_msgs.msg import Header
 from sensor_msgs.msg import PointCloud2
 import sensor_msgs.point_cloud2 as pc2
 from pct_planner.msg import PctTerrainMap
+from motion_planner_log import configure
 
 tomography_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, tomography_root)
@@ -35,7 +36,7 @@ def create_tomogram(profile, backend):
     except Exception as error:
         if backend == 'cuda':
             raise RuntimeError('CUDA backend unavailable: {}'.format(error))
-        rospy.logwarn('CUDA unavailable; using CPU backend: %s', error)
+        logger.warning('CUDA unavailable; using CPU backend: %s', error)
         from tomogram_cpu import CpuTomogram
         return CpuTomogram(profile), 'cpu'
 
@@ -60,7 +61,7 @@ class Tomography(object):
             return
 
         self.tomogram, self.backend = create_tomogram(profile, backend)
-        rospy.loginfo('Tomogram backend: %s', self.backend)
+        logger.info('Tomogram backend: %s', self.backend)
         points = self.loadPCD(self.pcd_file)
 
         # Process
@@ -85,7 +86,7 @@ class Tomography(object):
             GRID_POINTS_XYZI(self.resolution, self.map_dim_x, self.map_dim_y)
 
         layers_t, _, _, layers_g, layers_c = tomogram
-        rospy.loginfo('Reusing cached tomogram: %s', cache_path)
+        logger.info('Reusing cached tomogram: %s', cache_path)
         self.initROS()
         self.publishLayers(self.layer_G_pub_list, layers_g, layers_t)
         self.publishLayers(self.layer_C_pub_list, layers_c, None)
@@ -120,7 +121,7 @@ class Tomography(object):
         points = np.asarray(pcd.points).astype(np.float32)
         if points.size == 0:
             raise RuntimeError("cannot load point cloud: {}".format(path))
-        rospy.loginfo("PCD points: %d", points.shape[0])
+        logger.info("PCD points: %d", points.shape[0])
         if points.shape[1] > 3:
             points = points[:, :3]
         self.points_max = np.max(points, axis=0)
@@ -133,10 +134,8 @@ class Tomography(object):
         self.slice_h0 = self.points_min[-1] + self.slice_dh
         self.tomogram.initMappingEnv(self.center, self.map_dim_x, self.map_dim_y, n_slice_init, self.slice_h0)
 
-        rospy.loginfo("Map center: [%.2f, %.2f]", self.center[0], self.center[1])
-        rospy.loginfo("Dim_x: %d", self.map_dim_x)
-        rospy.loginfo("Dim_y: %d", self.map_dim_y)
-        rospy.loginfo("Num slices init: %d", n_slice_init)
+        logger.debug("Map center: [%.2f, %.2f]", self.center[0], self.center[1])
+        logger.debug("Dimensions: x=%d y=%d slices_init=%d", self.map_dim_x, self.map_dim_y, n_slice_init)
 
         self.VISPROTO_I, self.VISPROTO_P = \
             GRID_POINTS_XYZI(self.resolution, self.map_dim_x, self.map_dim_y)
@@ -166,12 +165,12 @@ class Tomography(object):
                 t_simp += timings['t_simp']
                 t_all += (time.time() - t_start) * 1e3
 
-        rospy.loginfo("Num slices simp: %d", layers_g.shape[0])
-        rospy.loginfo("Num repeats (for benchmarking only): %d", n_repeat)
-        rospy.loginfo(" -- avg t_map  (ms): %f", t_map / n_repeat)
-        rospy.loginfo(" -- avg t_trav (ms): %f", t_trav / n_repeat)
-        rospy.loginfo(" -- avg t_simp (ms): %f", t_simp / n_repeat)
-        rospy.loginfo(" -- avg t_all  (ms): %f", t_all / n_repeat)
+        logger.info("Num slices simp: %d", layers_g.shape[0])
+        logger.debug("Num repeats (for benchmarking only): %d", n_repeat)
+        logger.debug(" -- avg t_map  (ms): %f", t_map / n_repeat)
+        logger.debug(" -- avg t_trav (ms): %f", t_trav / n_repeat)
+        logger.debug(" -- avg t_simp (ms): %f", t_simp / n_repeat)
+        logger.debug(" -- avg t_all  (ms): %f", t_all / n_repeat)
 
         self.n_slice = layers_g.shape[0]
 
@@ -198,7 +197,7 @@ class Tomography(object):
         with open(self.export_dir + file_name, 'wb') as handle:
             pickle.dump(data_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        rospy.loginfo("Tomogram exported: %s", file_name)
+        logger.info("Tomogram exported: %s", file_name)
 
     def publishPoints(self, points):
         header = Header()
@@ -284,7 +283,7 @@ class Tomography(object):
         msg.elevation_valid = np.ascontiguousarray(
             np.isfinite(layers_g), dtype=np.uint8).ravel().tolist()
         self.terrain_map_pub.publish(msg)
-        rospy.loginfo('PCT terrain map published: %d layers, %d x %d cells on %s',
+        logger.info('PCT terrain map published: %d layers, %d x %d cells on %s',
                       msg.layers, msg.rows, msg.cols, self.terrain_map_pub.resolved_name)
 
 
@@ -302,8 +301,9 @@ if __name__ == '__main__':
     cfg = Config()
 
     rospy.init_node('pointcloud_tomography')
+    logger = configure('pointcloud_tomography')
     profile = load_public_profile()
-    rospy.loginfo('PCT traversability: kernel=%d slope=%.3f step=%.3f barrier=%.3f threshold=%.3f',
+    logger.info('PCT traversability: kernel=%d slope=%.3f step=%.3f barrier=%.3f threshold=%.3f',
                   profile.trav.kernel_size, profile.trav.slope_max,
                   profile.trav.step_max, profile.trav.cost_barrier,
                   profile.trav.cost_threshold)

@@ -4,6 +4,7 @@ Use of this source code is governed by the MPL-2.0 license, see LICENSE.
 ************************************************************************/
 
 #include <string>
+#include <motion_planner_log/logging.h>
 #include <gazebo/common/Events.hh>
 #include <ros/ros.h>
 #include <ros/advertise_options.h>
@@ -21,7 +22,14 @@ namespace gazebo
 
         void Load(sensors::SensorPtr _sensor, sdf::ElementPtr _sdf)
         {
-            this->parentSensor = std::dynamic_pointer_cast<sensors::ContactSensor>(_sensor); // Make sure the parent sensor is valid.        
+            if (!ros::isInitialized()) {
+                int argc = 0;
+                char** argv = nullptr;
+                ros::init(argc, argv, "gazebo_foot_contact",
+                          ros::init_options::NoSigintHandler | ros::init_options::AnonymousName);
+            }
+            motion_planner_log::initialize("pct_scan_gazebo_foot_contact");
+            this->parentSensor = std::dynamic_pointer_cast<sensors::ContactSensor>(_sensor); // Make sure the parent sensor is valid.
             if (!this->parentSensor){
                 gzerr << "UnitreeFootContactPlugin requires a ContactSensor.\n";
                 return;
@@ -37,7 +45,7 @@ namespace gazebo
             Fx = 0;
             Fy = 0;
             Fz = 0;
-            ROS_INFO("Load %s plugin.", _sensor->Name().c_str());
+            MOTION_PLANNER_LOG_INFO("Load %s plugin.", _sensor->Name().c_str());
         }
 
         private:
@@ -49,7 +57,8 @@ namespace gazebo
             // std::cout << count <<"\n";
             for (unsigned int i = 0; i < count; ++i){
                 if(contacts.contact(i).position_size() != 1){
-                    ROS_ERROR("Contact count isn't correct!!!!");
+                    MOTION_PLANNER_LOG_ERROR_THROTTLE(2.0,
+                                                      "Foot contact message has unexpected position count.");
                 }     
                 for (unsigned int j = 0; j < contacts.contact(i).position_size(); ++j){                 
                     // std::cout << i <<" "<< contacts.contact(i).position_size() <<" Force:"

@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<package format="2">
+<package>
   <name>pct_planner</name>
   <version>1.0.0</version>
   <description>Point Cloud Tomography based global planner for multi-layer environments.</description>
@@ -9,19 +9,28 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <depend>actionlib</depend>
-  <depend>actionlib_msgs</depend>
-  <depend>geometry_msgs</depend>
+  <build_depend>actionlib</build_depend>
+  <run_depend>actionlib</run_depend>
+  <build_depend>actionlib_msgs</build_depend>
+  <run_depend>actionlib_msgs</run_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <run_depend>geometry_msgs</run_depend>
   <build_depend>message_generation</build_depend>
-  <exec_depend>message_runtime</exec_depend>
-  <depend>rospy</depend>
-  <depend>std_msgs</depend>
-  <depend>sensor_msgs</depend>
-  <depend>nav_msgs</depend>
-  <exec_depend>dynamic_perception_3d</exec_depend>
+  <build_depend>motion_planner_log</build_depend>
+  <run_depend>message_runtime</run_depend>
+  <run_depend>motion_planner_log</run_depend>
+  <build_depend>rospy</build_depend>
+  <run_depend>rospy</run_depend>
+  <build_depend>std_msgs</build_depend>
+  <run_depend>std_msgs</run_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <build_depend>nav_msgs</build_depend>
+  <run_depend>nav_msgs</run_depend>
+  <run_depend>dynamic_perception_3d</run_depend>
 
-  <exec_depend>python3-numpy</exec_depend>
-  <exec_depend>python3-scipy</exec_depend>
+  <run_depend>python3-numpy</run_depend>
+  <run_depend>python3-scipy</run_depend>
   <test_depend>python3-nose</test_depend>
   <export>
   </export>

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <motion_planner_log/logging.h>
 #include <string>
 #include <string.h>
 #include "ros/ros.h"
@@ -398,9 +399,11 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "odom_visualization");
+  motion_planner_log::initialize("odom_visualization", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: odometry visualization.");
   ros::NodeHandle n("~");
 
-  n.param("mesh_resource", mesh_resource, std::string("package://odom_visualization/meshes/hummingbird.mesh"));
+  n.param("mesh_resource", mesh_resource, std::string("package://scan_planner/meshes/hummingbird.mesh"));
   n.param("color/r", color_r, 0.0);
   n.param("color/g", color_g, 0.0);
   n.param("color/b", color_b, 0.0);

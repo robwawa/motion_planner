@@ -19,7 +19,7 @@
   <arg name="reference_path_simplify_tolerance" default="0.15"/>
   <arg name="reference_path_mode" default="min_snap_single_pass"/>
   <arg name="use_pcd_map" default="false"/>
-  <arg name="pcd_map_file" default="$(find map_generator)/resource/building.pcd"/>
+  <arg name="pcd_map_file" default="$(find pct_planner)/rsc/pcd/building2_9.pcd"/>
   <arg name="body_height" default="0.4"/>
   <arg name="init_x" default="-5.5"/>
   <arg name="init_y" default="5.5"/>

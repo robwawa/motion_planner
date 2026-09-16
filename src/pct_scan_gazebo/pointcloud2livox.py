@@ -5,6 +5,7 @@ import threading
 
 import numpy as np
 import rospy
+from motion_planner_log import configure
 import sensor_msgs.point_cloud2 as pc2
 import tf
 from nav_msgs.msg import Odometry
@@ -31,7 +32,7 @@ class PointCloudBridge:
         self.sensor_pose_publisher = rospy.Publisher(sensor_pose_topic, PoseStamped, queue_size=2)
         rospy.Subscriber(odom_topic, Odometry, self.odom_callback, queue_size=5)
         rospy.Subscriber(raw_cloud_topic, PointCloud, self.cloud_callback, queue_size=2)
-        rospy.loginfo("Mid360 bridge: %s -> %s (%s)", raw_cloud_topic, cloud_topic, self.map_frame)
+        logger.info("Mid360 bridge: %s -> %s (%s)", raw_cloud_topic, cloud_topic, self.map_frame)
 
     def odom_callback(self, message):
         with self.lock:
@@ -45,7 +46,11 @@ class PointCloudBridge:
     def cloud_callback(self, message):
         with self.lock:
             odom = self.odom
-        if odom is None or not message.points:
+        if odom is None:
+            logger.warning_throttle(5.0, "Mid360 bridge waiting for odometry")
+            return
+        if not message.points:
+            logger.warning_throttle(2.0, "Mid360 bridge received an empty point cloud")
             return
 
         points = np.asarray([[p.x, p.y, p.z] for p in message.points], dtype=np.float32)
@@ -54,6 +59,7 @@ class PointCloudBridge:
         mask = (distance >= self.blind) & (vertical_angle >= self.min_angle) & (vertical_angle <= self.max_angle)
         points = points[mask]
         if points.size == 0:
+            logger.warning_throttle(2.0, "Mid360 bridge filtered all points: input=%d", len(message.points))
             return
 
         try:
@@ -62,7 +68,7 @@ class PointCloudBridge:
             points = (tf.transformations.quaternion_matrix(rotation)[:3, :3] @ points.T).T
             points += np.asarray(translation)
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as error:
-            rospy.logwarn_throttle(2.0, "Mid360 extrinsic unavailable: %s", error)
+            logger.warning_throttle(2.0, "Mid360 extrinsic unavailable: %s", error)
             return
 
         pose = odom.pose.pose
@@ -87,5 +93,6 @@ class PointCloudBridge:
 
 if __name__ == "__main__":
     rospy.init_node("pct_scan_pointcloud_bridge")
+    logger = configure("pct_scan_pointcloud_bridge")
     PointCloudBridge()
     rospy.spin()

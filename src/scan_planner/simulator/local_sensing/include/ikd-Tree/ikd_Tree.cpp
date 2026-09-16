@@ -1,4 +1,5 @@
 #include "ikd_Tree.h"
+#include <motion_planner_log/logging.h>
 
 /*
 Description: ikd-Tree: an incremental k-d tree for robotic applications 
@@ -163,7 +164,6 @@ void KD_TREE::start_thread(){
     pthread_mutex_init(&working_flag_mutex, NULL);
     pthread_mutex_init(&search_flag_mutex, NULL);
     pthread_create(&rebuild_thread, NULL, multi_thread_ptr, (void*) this);
-    printf("Multi thread started \n");    
 }
 
 void KD_TREE::stop_thread(){
@@ -196,7 +196,7 @@ void KD_TREE::multi_thread_rebuild(){
         if (Rebuild_Ptr != nullptr ){                    
             /* Traverse and copy */
             if (!Rebuild_Logger.empty()){
-                printf("\n\n\n\n\n\n\n\n\n\n\n ERROR!!! \n\n\n\n\n\n\n\n\n");
+                MOTION_PLANNER_LOG_ERROR("KD-tree rebuild thread encountered an unexpected error.");
             }
             rebuild_flag = true;
             if (*Rebuild_Ptr == Root_Node) {
@@ -297,7 +297,6 @@ void KD_TREE::multi_thread_rebuild(){
         pthread_mutex_unlock(&termination_flag_mutex_lock);
         usleep(100); 
     }
-    printf("Rebuild thread terminated normally\n");    
 }
 
 void KD_TREE::run_operation(KD_TREE_NODE ** root, Operation_Logger_Type operation){
@@ -1451,5 +1450,3 @@ bool MANUAL_Q::empty(){
 int MANUAL_Q::size(){
     return counter;
 }
-
-

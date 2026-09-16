@@ -1,5 +1,6 @@
 
 #include <plan_manage/scan_replan_fsm.h>
+#include <motion_planner_log/logging.h>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
@@ -155,21 +156,21 @@ namespace scan_planner
 
     if (reference_path_z_mode_ != "base" && reference_path_z_mode_ != "ground")
     {
-      ROS_ERROR("[SCANReplanFSM] fsm/reference_path_z_mode must be 'base' or 'ground', got '%s'.",
+      MOTION_PLANNER_LOG_ERROR("fsm/reference_path_z_mode must be 'base' or 'ground', got '%s'.",
                 reference_path_z_mode_.c_str());
       ros::shutdown();
       return;
     }
     if (reference_path_min_distance_ < 0.0 || reference_path_simplify_tolerance_ < 0.0)
     {
-      ROS_ERROR("[SCANReplanFSM] Reference-path preprocessing distances must be non-negative.");
+      MOTION_PLANNER_LOG_ERROR("Reference-path preprocessing distances must be non-negative.");
       ros::shutdown();
       return;
     }
     if (reference_path_mode_ != "min_snap_single_pass" &&
         reference_path_mode_ != "polyline_rolling_window")
     {
-      ROS_ERROR("[SCANReplanFSM] fsm/reference_path_mode must be 'min_snap_single_pass' or "
+      MOTION_PLANNER_LOG_ERROR("fsm/reference_path_mode must be 'min_snap_single_pass' or "
                 "'polyline_rolling_window', got '%s'.", reference_path_mode_.c_str());
       ros::shutdown();
       return;
@@ -178,7 +179,7 @@ namespace scan_planner
         adaptive_horizon_curvature_gain_ < 0.0 || adaptive_horizon_slope_gain_ < 0.0 ||
         adaptive_horizon_slope_smoothing_window_ <= 0.0)
     {
-      ROS_ERROR("[SCANReplanFSM] Invalid adaptive horizon parameters.");
+      MOTION_PLANNER_LOG_ERROR("Invalid adaptive horizon parameters.");
       ros::shutdown();
       return;
     }
@@ -186,7 +187,7 @@ namespace scan_planner
         direction_change_min_speed_ < 0.0 || direction_change_stop_speed_ < 0.0 ||
         direction_change_brake_acc_ratio_ <= 0.0 || direction_change_brake_acc_ratio_ > 1.0)
     {
-      ROS_ERROR("[SCANReplanFSM] Invalid direction-change brake parameters.");
+      MOTION_PLANNER_LOG_ERROR("Invalid direction-change brake parameters.");
       ros::shutdown();
       return;
     }
@@ -198,7 +199,7 @@ namespace scan_planner
           "rosparam load " + keypoints_yaml + " " + shellQuote(nh.getNamespace());
       if (std::system(load_keypoints_cmd.c_str()) != 0)
       {
-        ROS_ERROR("[SCANReplanFSM] Failed to load keypoints_yaml: tools/keypoint.yaml");
+        MOTION_PLANNER_LOG_ERROR("Failed to load keypoints_yaml: tools/keypoint.yaml");
         ros::shutdown();
         return;
       }
@@ -207,7 +208,7 @@ namespace scan_planner
 
       if (waypoint_num_ <= 0)
       {
-        ROS_ERROR("[SCANReplanFSM] navi_mode=2 requires keypoints_yaml with fsm/waypoint_num and fsm/waypoint{i}_{x,y,z}.");
+        MOTION_PLANNER_LOG_ERROR("navi_mode=2 requires keypoints_yaml with fsm/waypoint_num and fsm/waypoint{i}_{x,y,z}.");
         ros::shutdown();
         return;
       }
@@ -259,7 +260,12 @@ namespace scan_planner
     else if (navi_mode_ == NAVI_MODE::REFERENCE_PATH)
       path_sub_ = nh.subscribe(reference_path_topic_, 1, &SCANReplanFSM::pathCallback, this);
     else
-      cout << "Wrong navi_mode_ value! navi_mode_=" << navi_mode_ << endl;
+      MOTION_PLANNER_LOG_ERROR("Unsupported navigation mode: %d", navi_mode_);
+
+    MOTION_PLANNER_LOG_INFO("FSM ready: navigation_mode=%d frame=%s reference_path_topic=%s replan_threshold=%.3f emergency_time=%.3f fail_safe=%s",
+                            navi_mode_, self_inflation_frame_id_.c_str(),
+                            reference_path_topic_.c_str(), replan_thresh_, emergency_time_,
+                            enable_fail_safe_ ? "enabled" : "disabled");
   }
 
   void SCANReplanFSM::publishGlobalReferencePath()
@@ -321,7 +327,7 @@ namespace scan_planner
     }
     else
     {
-      ROS_ERROR("Unable to generate global trajectory to first preset waypoint!");
+      MOTION_PLANNER_LOG_ERROR("Unable to generate global trajectory to first preset waypoint!");
     }
   }
 
@@ -332,7 +338,7 @@ namespace scan_planner
 
     if (!rviz_height_ready_)
     {
-      ROS_WARN("[SCANReplanFSM] Ignore RViz goal before receiving initial body pose.");
+      MOTION_PLANNER_LOG_WARN("Ignore RViz goal before receiving initial body pose.");
       return;
     }
 
@@ -346,14 +352,14 @@ namespace scan_planner
   {
     if (!msg || msg->poses.empty())
     {
-      ROS_WARN_THROTTLE(1.0, "[waypointCallback] Empty waypoint message, ignore.");
+      MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "Empty waypoint message, ignore.");
       return;
     }
 
     if (msg->poses[0].pose.position.z < -0.1)
       return;
 
-    cout << "Triggered!" << endl;
+    MOTION_PLANNER_LOG_INFO("Received waypoint target.");
     trigger_ = true;
     init_pt_ = odom_pos_;
 
@@ -407,7 +413,7 @@ namespace scan_planner
     }
     else
     {
-      ROS_ERROR("Unable to generate global trajectory!");
+      MOTION_PLANNER_LOG_ERROR("Unable to generate global trajectory!");
     }
   }
 
@@ -415,7 +421,7 @@ namespace scan_planner
   {
     if (waypoints.size() < 2)
     {
-      ROS_WARN("[planGlobalTrajByWaypoints] Reference path requires at least two points.");
+      MOTION_PLANNER_LOG_WARN("Reference path requires at least two points.");
       return false;
     }
 
@@ -439,7 +445,7 @@ namespace scan_planner
 
     if (!success)
     {
-      ROS_ERROR("Unable to generate global trajectory from waypoints!");
+      MOTION_PLANNER_LOG_ERROR("Unable to generate global trajectory from waypoints!");
       return false;
     }
 
@@ -468,7 +474,7 @@ namespace scan_planner
   {
     if (current_wp_ < 0 || current_wp_ >= (int)active_waypoints_.size())
     {
-      ROS_WARN("[navi_mode=%d] No active waypoint to plan.", navi_mode_);
+      MOTION_PLANNER_LOG_WARN("No active waypoint to plan: navigation_mode=%d", navi_mode_);
       return false;
     }
 
@@ -485,7 +491,7 @@ namespace scan_planner
 
     if (!success)
     {
-      ROS_ERROR("[navi_mode=%d] Unable to generate trajectory to waypoint %d.", navi_mode_, current_wp_ + 1);
+      MOTION_PLANNER_LOG_ERROR("Unable to generate trajectory to waypoint %d.", current_wp_ + 1);
       return false;
     }
 
@@ -506,7 +512,7 @@ namespace scan_planner
     publishGlobalReferencePath();
     visualization_->displayGlobalPathList(gloabl_traj, 0.1, 0);
     visualization_->displayGoalPoint(end_pt_, Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, current_wp_);
-    ROS_INFO("[navi_mode=%d] Planning to waypoint %d/%zu: [%.2f, %.2f, %.2f].",
+    MOTION_PLANNER_LOG_INFO("Planning to waypoint %d/%zu: [%.2f, %.2f, %.2f].",
              navi_mode_, current_wp_ + 1, active_waypoints_.size(), end_pt_(0), end_pt_(1), end_pt_(2));
 
     return true;
@@ -561,13 +567,13 @@ namespace scan_planner
         end_pt_ = pt;
         global_data.global_duration_ = t;
         global_data.last_progress_time_ = std::min(global_data.last_progress_time_, t);
-        ROS_WARN("[global target] Target [%.2f, %.2f, %.2f] is occupied; use backward collision-free point [%.2f, %.2f, %.2f].",
+        MOTION_PLANNER_LOG_WARN("Target [%.2f, %.2f, %.2f] is occupied; use backward collision-free point [%.2f, %.2f, %.2f].",
                  raw_end(0), raw_end(1), raw_end(2), end_pt_(0), end_pt_(1), end_pt_(2));
         return true;
       }
     }
 
-    ROS_ERROR("[global target] Target is occupied, and no collision-free point was found along the global trajectory.");
+    MOTION_PLANNER_LOG_ERROR("Target is occupied, and no collision-free point was found along the global trajectory.");
     return false;
   }
 
@@ -575,13 +581,13 @@ namespace scan_planner
   {
     if (!msg || msg->poses.empty())
     {
-      ROS_WARN_THROTTLE(1.0, "[pathCallback] Received empty /initial_path, ignore.");
+      MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "Received empty /initial_path, ignore.");
       return;
     }
 
     if (!have_odom_)
     {
-      ROS_WARN_THROTTLE(1.0, "[pathCallback] No odometry yet, cannot plan global trajectory.");
+      MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "No odometry yet, cannot plan global trajectory.");
       return;
     }
 
@@ -660,10 +666,10 @@ namespace scan_planner
     // Keep the complete, ordered PCT path as the height profile. Unlike the
     // simplified planning waypoints above, it must not be rewritten by odom.
     if (!reference_path_z_profile_.setPath(raw_waypoints))
-      ROS_WARN("[pathCallback] Reference path has no usable XY progress; use linear Z initialization.");
+      MOTION_PLANNER_LOG_WARN("Reference path has no usable XY progress; use linear Z initialization.");
     reference_path_z_progress_ = 0.0;
 
-    ROS_INFO("[pathCallback] Reference path reduced from %zu poses to %zu trajectory waypoints.",
+    MOTION_PLANNER_LOG_INFO("Reference path reduced from %zu poses to %zu trajectory waypoints.",
              msg->poses.size(), waypoints.size());
 
     bool success = planGlobalTrajByWaypoints(waypoints);
@@ -681,11 +687,10 @@ namespace scan_planner
         changeFSMExecState(REPLAN_TRAJ, "TRIG");
       }
 
-      ROS_INFO("==========================================\n");
     }
     else
     {
-      ROS_ERROR("❌ Unable to generate global trajectory!");
+      MOTION_PLANNER_LOG_ERROR("Unable to generate global trajectory.");
     }
   }
 
@@ -699,7 +704,7 @@ namespace scan_planner
     {
       rviz_goal_height_ = odom_pos_(2);
       rviz_height_ready_ = true;
-      ROS_INFO("[SCANReplanFSM] Set RViz goal height from initial body_pose z: %.3f", rviz_goal_height_);
+      MOTION_PLANNER_LOG_INFO("Set RViz goal height from initial body_pose z: %.3f", rviz_goal_height_);
     }
 
     odom_vel_(0) = msg->twist.twist.linear.x;
@@ -844,7 +849,7 @@ namespace scan_planner
     const double brake_acceleration = direction_change_brake_acc_ratio_ * planner_manager_->pp_.max_acc_;
     if (!planner_manager_->planBrakingTraj(t_cur, brake_acceleration))
     {
-      ROS_WARN("[direction-change brake] Unable to generate braking trajectory; fall back to direct replan.");
+      MOTION_PLANNER_LOG_WARN("Unable to generate braking trajectory; fall back to direct replan.");
       return false;
     }
 
@@ -874,7 +879,7 @@ namespace scan_planner
       bspline.knots.push_back(knots(i));
     bspline_pub_.publish(bspline);
 
-    ROS_INFO("[direction-change brake] Direction change exceeds %.1f deg; braking along active trajectory.",
+    MOTION_PLANNER_LOG_INFO("Direction change exceeds %.1f deg; braking along active trajectory.",
              direction_change_threshold_deg_);
     changeFSMExecState(BRAKE_FOR_NEW_TARGET, "TARGET");
     return true;
@@ -891,7 +896,9 @@ namespace scan_planner
     static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "BRAKE_FOR_NEW_TARGET", "EMERGENCY_STOP"};
     int pre_s = int(exec_state_);
     exec_state_ = new_state;
-    cout << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
+    if (new_state != static_cast<FSM_EXEC_STATE>(pre_s))
+      MOTION_PLANNER_LOG_INFO("FSM transition: trigger=%s from=%s to=%s", pos_call.c_str(),
+                              state_str[pre_s].c_str(), state_str[int(new_state)].c_str());
   }
 
   std::pair<int, SCANReplanFSM::FSM_EXEC_STATE> SCANReplanFSM::timesOfConsecutiveStateCalls()
@@ -903,7 +910,8 @@ namespace scan_planner
   {
     static string state_str[7] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "BRAKE_FOR_NEW_TARGET", "EMERGENCY_STOP"};
 
-    cout << "[FSM]: state: " + state_str[int(exec_state_)] << endl;
+    MOTION_PLANNER_LOG_DEBUG("FSM state=%s consecutive_calls=%d",
+                             state_str[int(exec_state_)].c_str(), continuously_called_times_);
   }
 
   void SCANReplanFSM::execFSMCallback(const ros::TimerEvent &e)
@@ -916,9 +924,9 @@ namespace scan_planner
     {
       printFSMExecState();
       if (!have_odom_)
-        cout << "no odom." << endl;
+        MOTION_PLANNER_LOG_DEBUG("FSM waiting for odometry.");
       if (!trigger_)
-        cout << "wait for goal." << endl;
+        MOTION_PLANNER_LOG_DEBUG("FSM waiting for goal.");
       fsm_num = 0;
     }
 
@@ -1030,7 +1038,7 @@ namespace scan_planner
             global_data.last_progress_time_ < global_data.global_duration_ - 1e-3;
         if (reference_path_has_next_window)
         {
-          ROS_INFO("[reference path] Local window complete (%.2f/%.2fs); planning next window.",
+          MOTION_PLANNER_LOG_INFO("Local window complete (%.2f/%.2fs); planning next window.",
                    global_data.last_progress_time_, global_data.global_duration_);
           changeFSMExecState(REPLAN_TRAJ, "FSM");
           return;
@@ -1100,7 +1108,7 @@ namespace scan_planner
           changeFSMExecState(GEN_NEW_TRAJ, "FSM");
         else if (need_hover_stop_ && odom_vel_.norm() < 0.1)
         {
-          ROS_INFO("Exiting EMERGENCY_STOP. Switching to WAIT_TARGET. Need a new target point.");
+          MOTION_PLANNER_LOG_INFO("Exiting EMERGENCY_STOP. Switching to WAIT_TARGET. Need a new target point.");
           need_hover_stop_ = false;
           have_target_ = false;
           trigger_ = false;
@@ -1108,7 +1116,7 @@ namespace scan_planner
           {
             global_replan_after_local_failure_ = false;
             replan_pub_.publish(std_msgs::Empty());
-            ROS_WARN("[reference path] Local replanning budget exhausted; requesting PCT global replan.");
+            MOTION_PLANNER_LOG_WARN("Local replanning budget exhausted; requesting PCT global replan.");
           }
           changeFSMExecState(WAIT_TARGET, "EMERGENCY_EXIT");
         }
@@ -1130,7 +1138,7 @@ namespace scan_planner
     if (replan_fail_count_ >= max_replan_fail_count_)
     {
       const bool request_global_replan = navi_mode_ == NAVI_MODE::REFERENCE_PATH;
-      ROS_WARN("Replan failed %d times. Emergency stop and wait for a new target.", replan_fail_count_);
+      MOTION_PLANNER_LOG_WARN("Replan failed %d times. Emergency stop and wait for a new target.", replan_fail_count_);
       replan_fail_count_ = 0;
       need_hover_stop_ = true;
       global_replan_after_local_failure_ = request_global_replan;
@@ -1158,7 +1166,7 @@ namespace scan_planner
       // on the active local trajectory, rather than directly from odometry.
       // Keep both states in the log: a Z mismatch here identifies whether an
       // abnormal trajectory is being fed back into the next replan.
-      ROS_DEBUG_THROTTLE(1.0,
+      MOTION_PLANNER_LOG_DEBUG_THROTTLE(1.0,
                          "[ReplanZDiag] replan from active trajectory: traj_id=%d, t_cur=%.3f/%.3f, "
                          "pred_pos=[%.3f, %.3f, %.3f], pred_vel=[%.3f, %.3f, %.3f], pred_acc=[%.3f, %.3f, %.3f], "
                          "odom_pos=[%.3f, %.3f, %.3f], odom_vel=[%.3f, %.3f, %.3f], delta_pos=[%.3f, %.3f, %.3f]",
@@ -1205,7 +1213,8 @@ namespace scan_planner
             Eigen::Vector3d::Zero(),
             Eigen::Vector3d::Zero()))
     {
-      ROS_ERROR("[navi_mode=%d] Unable to refresh global trajectory from odom to current target.", navi_mode_);
+      MOTION_PLANNER_LOG_ERROR("Unable to refresh global trajectory from odometry to current target: navigation_mode=%d",
+                               navi_mode_);
       return false;
     }
 
@@ -1274,7 +1283,7 @@ namespace scan_planner
       {
         if (exec_state_ == BRAKE_FOR_NEW_TARGET)
         {
-          ROS_WARN("[direction-change brake] Braking trajectory is in collision; emergency stop.");
+          MOTION_PLANNER_LOG_WARN("Braking trajectory is in collision; emergency stop.");
           flag_escape_emergency_ = true;
           need_hover_stop_ = false;
           changeFSMExecState(EMERGENCY_STOP, "SAFETY");
@@ -1289,12 +1298,12 @@ namespace scan_planner
         {
           if (t - t_cur < emergency_time_) // 0.8s of emergency time
           {
-            ROS_WARN("Suddenly discovered obstacles. emergency stop! time=%f", t - t_cur);
+            MOTION_PLANNER_LOG_WARN("Suddenly discovered obstacles. emergency stop! time=%f", t - t_cur);
             changeFSMExecState(EMERGENCY_STOP, "SAFETY");
           }
           else
           {
-            //ROS_WARN("current traj in collision, replan.");
+            //MOTION_PLANNER_LOG_WARN("current traj in collision, replan.");
             changeFSMExecState(REPLAN_TRAJ, "SAFETY");
           }
           return;
@@ -1333,7 +1342,7 @@ namespace scan_planner
     if (plan_success && use_reference_z)
       reference_path_z_progress_ = reference_start_progress;
 
-    cout << "final_plan_success=" << plan_success << endl;
+    MOTION_PLANNER_LOG_INFO("Local trajectory planning result: success=%d", plan_success ? 1 : 0);
 
     if (plan_success)
     {
@@ -1575,7 +1584,7 @@ namespace scan_planner
       const char *limiter = route_distance <= adaptive_horizon_min_ ? "min" :
                             (route_distance >= adaptive_horizon_max_ ? "max" : "route");
 
-      ROS_INFO_THROTTLE(1.0,
+      MOTION_PLANNER_LOG_INFO_THROTTLE(1.0,
                         "[adaptive horizon] L=%.2f (route=%.2f curvature=%.3f grade_rate=%.3f window=%.2f), limiter=%s",
                         target_distance, route_distance, max_curvature, max_grade_rate,
                         adaptive_horizon_slope_smoothing_window_, limiter);
@@ -1640,12 +1649,12 @@ namespace scan_planner
 
       if (found_free_target)
       {
-        ROS_WARN_THROTTLE(1.0, "Local target in collision, adjusted to a nearby collision-free point.");
+        MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "Local target in collision, adjusted to a nearby collision-free point.");
         target_t = adjusted_t;
       }
       else
       {
-        ROS_WARN_THROTTLE(1.0, "Local target in collision and no nearby collision-free target was found.");
+        MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "Local target in collision and no nearby collision-free target was found.");
       }
     }
 

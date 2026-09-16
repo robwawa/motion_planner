@@ -1,4 +1,5 @@
 #include "bspline_opt/bspline_optimizer.h"
+#include <motion_planner_log/logging.h>
 #include "bspline_opt/gradient_descent_optimizer.h"
 #include <algorithm>
 #include <cmath>
@@ -120,7 +121,7 @@ namespace scan_planner
           if (in_id >= 0 && out_id >= in_id && out_id < init_points.cols())
             segment_ids.push_back(std::pair<int, int>(in_id, out_id));
           else
-            ROS_WARN("Skip invalid collision segment: in_id=%d, out_id=%d.", in_id, out_id);
+            MOTION_PLANNER_LOG_WARN("Skip invalid collision segment: in_id=%d, out_id=%d.", in_id, out_id);
         }
       }
     }
@@ -137,14 +138,14 @@ namespace scan_planner
         vector<Eigen::Vector3d> path = a_star_->getPath();
         if (path.size() < 2)
         {
-          ROS_WARN("a star path has less than 2 points, force return!");
+          MOTION_PLANNER_LOG_WARN("a star path has less than 2 points, force return!");
           return a_star_paths;
         }
         a_star_paths.push_back(path);
       }
       else
       {
-        ROS_ERROR("a star error, force return!");
+        MOTION_PLANNER_LOG_ERROR("a star error, force return!");
         return a_star_paths;
       }
     }
@@ -218,7 +219,7 @@ namespace scan_planner
     {
       if (i >= a_star_paths.size() || a_star_paths[i].size() < 2)
       {
-        ROS_WARN("Skip invalid A-star path while assigning control point directions.");
+        MOTION_PLANNER_LOG_WARN("Skip invalid A-star path while assigning control point directions.");
         continue;
       }
 
@@ -357,7 +358,7 @@ namespace scan_planner
       else
       {
         // Just ignore, it does not matter ^_^.
-        // ROS_ERROR("Failed to generate direction! segment_id=%d", i);
+        // MOTION_PLANNER_LOG_ERROR("Failed to generate direction! segment_id=%d", i);
       }
     }
 
@@ -755,7 +756,7 @@ namespace scan_planner
         }
         if (j < 0) // fail to get the obs free point
         {
-          ROS_ERROR("ERROR! the drone is in obstacle. This should not happen.");
+          MOTION_PLANNER_LOG_ERROR("ERROR! the drone is in obstacle. This should not happen.");
           in_id = 0;
         }
 
@@ -771,7 +772,7 @@ namespace scan_planner
         }
         if (j >= cps_.size) // fail to get the obs free point
         {
-          ROS_WARN("WARN! terminal point of the current trajectory is in obstacle, skip this planning.");
+          MOTION_PLANNER_LOG_WARN("WARN! terminal point of the current trajectory is in obstacle, skip this planning.");
 
           force_stop_type_ = STOP_FOR_ERROR;
           return false;
@@ -796,7 +797,7 @@ namespace scan_planner
           vector<Eigen::Vector3d> path = a_star_->getPath();
           if (path.size() < 2)
           {
-            ROS_WARN("A-star path has less than 2 points, drop this collision segment.");
+            MOTION_PLANNER_LOG_WARN("A-star path has less than 2 points, drop this collision segment.");
             segment_ids.erase(segment_ids.begin() + i);
             i--;
             continue;
@@ -808,11 +809,11 @@ namespace scan_planner
           segment_ids[i].second = segment_ids[i + 1].second;
           segment_ids.erase(segment_ids.begin() + i + 1);
           --i;
-          ROS_WARN("A-star failed on one collision segment, merge it with the next segment.");
+          MOTION_PLANNER_LOG_WARN("A-star failed on one collision segment, merge it with the next segment.");
         }
         else
         {
-          ROS_ERROR("a star error");
+          MOTION_PLANNER_LOG_ERROR("a star error");
           segment_ids.erase(segment_ids.begin() + i);
           i--;
         }
@@ -823,7 +824,7 @@ namespace scan_planner
       {
         if (i >= a_star_paths.size() || a_star_paths[i].size() < 2)
         {
-          ROS_WARN("Skip invalid A-star path while assigning rebound directions.");
+          MOTION_PLANNER_LOG_WARN("Skip invalid A-star path while assigning rebound directions.");
           continue;
         }
 
@@ -918,7 +919,7 @@ namespace scan_planner
             }
         }
         else
-          ROS_WARN("Failed to generate direction. It doesn't matter.");
+          MOTION_PLANNER_LOG_WARN("Failed to generate direction. It doesn't matter.");
       }
 
       force_stop_type_ = STOP_FOR_REBOUND;
@@ -997,7 +998,7 @@ namespace scan_planner
           result == lbfgs::LBFGS_ALREADY_MINIMIZED ||
           result == lbfgs::LBFGS_STOP)
       {
-        //ROS_WARN("Solver error in planning!, return = %s", lbfgs::lbfgs_strerror(result));
+        //MOTION_PLANNER_LOG_WARN("Solver error in planning!, return = %s", lbfgs::lbfgs_strerror(result));
         flag_force_return = false;
 
         UniformBspline traj = UniformBspline(cps_.points, 3, bspline_interval_);
@@ -1045,7 +1046,7 @@ namespace scan_planner
               GridMap::PlanningOccupancyReason collision_reason;
               const int collision_planning_occ = grid_map_->getPlanningOccupancy(
                   pos, collision_yaw, &collision_reason);
-              ROS_WARN("[BsplineOptimizer] First 3 control points collision: t=%.3f, pos=[%.3f, %.3f, %.3f], yaw=%.3f, type=%s, planning_occ=%d, raw_scan_occ=%d, inflated_scan_occ=%d. Return false.",
+              MOTION_PLANNER_LOG_WARN("First 3 control points collision: t=%.3f, pos=[%.3f, %.3f, %.3f], yaw=%.3f, type=%s, planning_occ=%d, raw_scan_occ=%d, inflated_scan_occ=%d. Return false.",
                        t, pos.x(), pos.y(), pos.z(), collision_yaw, occupancyType(collision_planning_occ, collision_reason),
                        collision_planning_occ, grid_map_->getOccupancy(pos),
                        grid_map_->getInflateOccupancy(pos, collision_yaw));
@@ -1058,7 +1059,7 @@ namespace scan_planner
                 const double control_yaw = estimateControlPointYaw(cps_.points, control_point);
                 GridMap::PlanningOccupancyReason reason;
                 const int planning_occ = grid_map_->getPlanningOccupancy(control_pos, control_yaw, &reason);
-                ROS_WARN("[BsplineOptimizer] control_point[%d]=[%.3f, %.3f, %.3f], yaw=%.3f, type=%s, planning_occ=%d, raw_scan_occ=%d, inflated_scan_occ=%d",
+                MOTION_PLANNER_LOG_WARN("control_point[%d]=[%.3f, %.3f, %.3f], yaw=%.3f, type=%s, planning_occ=%d, raw_scan_occ=%d, inflated_scan_occ=%d",
                          control_point, control_pos.x(), control_pos.y(), control_pos.z(), control_yaw,
                          occupancyType(planning_occ, reason), planning_occ, grid_map_->getOccupancy(control_pos),
                          grid_map_->getInflateOccupancy(control_pos, control_yaw));
@@ -1072,7 +1073,8 @@ namespace scan_planner
 
         if (!flag_occ)
         {
-          printf("\033[32miter(+1)=%d,time(ms)=%5.3f,total_t(ms)=%5.3f,cost=%5.3f\n\033[0m", iter_num_, time_ms, total_time_ms, final_cost);
+          MOTION_PLANNER_LOG_DEBUG("Optimization iteration=%d time_ms=%.3f total_time_ms=%.3f cost=%.3f",
+                                   iter_num_, time_ms, total_time_ms, final_cost);
           success = true;
         }
         else // restart
@@ -1081,18 +1083,19 @@ namespace scan_planner
           initControlPoints(cps_.points, false);
           new_lambda2_ *= 2;
 
-          printf("\033[32miter(+1)=%d,time(ms)=%5.3f,keep optimizing\n\033[0m", iter_num_, time_ms);
+          MOTION_PLANNER_LOG_DEBUG("Optimization iteration=%d time_ms=%.3f; continuing after restart",
+                                   iter_num_, time_ms);
         }
       }
       else if (result == lbfgs::LBFGSERR_CANCELED)
       {
         flag_force_return = true;
         rebound_times++;
-        cout << "iter=" << iter_num_ << ",time(ms)=" << time_ms << ",rebound." << endl;
+        MOTION_PLANNER_LOG_DEBUG("Optimization rebound: iteration=%d time_ms=%.3f", iter_num_, time_ms);
       }
       else
       {
-        ROS_WARN("Solver error. Return = %d, %s. Skip this planning.", result, lbfgs::lbfgs_strerror(result));
+        MOTION_PLANNER_LOG_WARN("Solver error. Return = %d, %s. Skip this planning.", result, lbfgs::lbfgs_strerror(result));
         // while (ros::ok());
       }
 
@@ -1135,7 +1138,7 @@ namespace scan_planner
       }
       else
       {
-        ROS_ERROR("Solver error in refining!, return = %d, %s", result, lbfgs::lbfgs_strerror(result));
+        MOTION_PLANNER_LOG_ERROR("Solver error in refining!, return = %d, %s", result, lbfgs::lbfgs_strerror(result));
       }
 
       UniformBspline traj = UniformBspline(cps_.points, 3, bspline_interval_);

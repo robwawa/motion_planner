@@ -14,6 +14,7 @@ from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry, Path
 from pct_planner.msg import PlanPath3DAction, PlanPath3DGoal
 from std_msgs.msg import Empty, String
+from motion_planner_log import configure
 
 # catkin's devel-space executable is a relay script, so its directory is not
 # this source file's directory. Keep local helper modules importable in both
@@ -107,11 +108,13 @@ class NavigationManager:
         with self.lock:
             odom = self.odom
         if odom is None:
+            logger.warning('Reject goal: odometry is not available.')
             self.publish_status('REJECTED', 'no_odometry')
             return
         try:
             goal = self.transform_pose(msg)
         except Exception as exc:
+            logger.warning('Reject goal: transform to %s failed: %s', self.frame, exc)
             self.publish_status('REJECTED', 'tf:' + str(exc))
             return
 
@@ -200,9 +203,12 @@ class NavigationManager:
                     rospy.Duration(delay),
                     lambda _event: self.retry_callback(generation), oneshot=True)
         if retry:
+            logger.warning('Planning failed: reason=%s retry_attempt=%d delay=%.1fs',
+                           reason, self.replan_attempt + 1, delay)
             self.publish_status('REPLAN_RETRY', '{}; attempt={} delay={:.1f}s'.format(
                 reason, self.replan_attempt + 1, delay))
         else:
+            logger.error('Planning aborted: replan=%s reason=%s', is_replan, reason)
             self.publish_status('REPLAN_FAILED' if is_replan else 'ABORTED', reason)
 
     def retry_callback(self, generation):
@@ -242,6 +248,7 @@ class NavigationManager:
             self.replan_attempt = 0
             self._cancel_retry_locked()
         self.reference_pub.publish(path)
+        logger.info('Path accepted: replan=%s poses=%d frame=%s', is_replan, len(path.poses), self.frame)
         self.publish_status('PATH_SWITCHED' if is_replan else 'PATH_TRACKING')
 
     def prepare_path(self, path):
@@ -282,5 +289,7 @@ class NavigationManager:
 
 if __name__ == '__main__':
     rospy.init_node('navigation_manager')
+    logger = configure('navigation_manager')
     NavigationManager()
+    logger.info('Ready: navigation manager initialized.')
     rospy.spin()

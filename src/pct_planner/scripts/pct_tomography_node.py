@@ -6,6 +6,7 @@ import runpy
 import sys
 
 import rospkg
+from motion_planner_log import configure
 
 
 def package_path():
@@ -18,6 +19,7 @@ def package_path():
 
 
 def main():
+    logger = configure('pct_tomography_node')
     package_root = package_path()
     script_dir = os.path.join(package_root, 'tomography', 'scripts')
     config_dir = os.path.join(package_root, 'tomography')
@@ -26,6 +28,7 @@ def main():
     sys.path.insert(0, config_dir)
     sys.path.insert(0, traversability_config_dir)
     script_path = os.path.join(script_dir, 'tomography.py')
+    logger.info('Starting tomography node: script=%s config=%s', script_path, traversability_config_dir)
     # roslaunch appends private remapping arguments such as __name:=... and
     # __log:=....  They are meaningful to rospy but not to argparse.
     sys.argv = [script_path] + [arg for arg in sys.argv[1:] if ':=' not in arg]

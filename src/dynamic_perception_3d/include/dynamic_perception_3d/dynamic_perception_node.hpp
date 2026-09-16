@@ -46,6 +46,8 @@ class DynamicPerceptionNode {
   tf2_ros::TransformListener tf_listener_;
   SensorPose last_sensor_pose_;
   bool has_last_sensor_pose_ = false;
+  mutable bool health_state_known_ = false;
+  mutable bool last_health_ = false;
 
   std::string static_pcd_file_;
   std::string map_frame_;

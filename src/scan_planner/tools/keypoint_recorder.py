@@ -11,6 +11,7 @@ import tty
 try:
     import rospy
     from nav_msgs.msg import Odometry
+    from motion_planner_log import configure
 except ImportError as exc:
     print("Failed to import ROS Python modules: {}".format(exc), file=sys.stderr)
     print("Source your ROS workspace first, for example:", file=sys.stderr)
@@ -64,11 +65,11 @@ class KeypointRecorder:
     def record_current(self):
         point = self.current_point()
         if point is None:
-            rospy.logwarn("No valid odometry yet; cannot record waypoint.")
+            logger.warning("No valid odometry yet; cannot record waypoint.")
             return
 
         self.waypoints.append(point)
-        rospy.loginfo(
+        logger.info(
             "Recorded waypoint %d: [%.3f, %.3f, %.3f]",
             len(self.waypoints),
             point[0],
@@ -78,16 +79,16 @@ class KeypointRecorder:
 
     def replace_current(self, index):
         if index < 1 or index > len(self.waypoints):
-            rospy.logwarn("Invalid waypoint index %d. Valid range: 1-%d.", index, len(self.waypoints))
+            logger.warning("Invalid waypoint index %d. Valid range: 1-%d.", index, len(self.waypoints))
             return
 
         point = self.current_point()
         if point is None:
-            rospy.logwarn("No valid odometry yet; cannot replace waypoint.")
+            logger.warning("No valid odometry yet; cannot replace waypoint.")
             return
 
         self.waypoints[index - 1] = point
-        rospy.loginfo(
+        logger.info(
             "Replaced waypoint %d: [%.3f, %.3f, %.3f]",
             index,
             point[0],
@@ -97,11 +98,11 @@ class KeypointRecorder:
 
     def delete_waypoint(self, index):
         if index < 1 or index > len(self.waypoints):
-            rospy.logwarn("Invalid waypoint index %d. Valid range: 1-%d.", index, len(self.waypoints))
+            logger.warning("Invalid waypoint index %d. Valid range: 1-%d.", index, len(self.waypoints))
             return
 
         point = self.waypoints.pop(index - 1)
-        rospy.loginfo(
+        logger.info(
             "Deleted waypoint %d: [%.3f, %.3f, %.3f]",
             index,
             point[0],
@@ -111,11 +112,11 @@ class KeypointRecorder:
 
     def undo_last(self):
         if not self.waypoints:
-            rospy.logwarn("No waypoint to undo.")
+            logger.warning("No waypoint to undo.")
             return
 
         point = self.waypoints.pop()
-        rospy.loginfo(
+        logger.info(
             "Removed waypoint %d: [%.3f, %.3f, %.3f]",
             len(self.waypoints) + 1,
             point[0],
@@ -125,12 +126,12 @@ class KeypointRecorder:
 
     def list_waypoints(self):
         if not self.waypoints:
-            rospy.loginfo("No recorded waypoints.")
+            logger.info("No recorded waypoints.")
             return
 
-        rospy.loginfo("Recorded waypoints:")
+        logger.info("Recorded waypoints:")
         for index, point in enumerate(self.waypoints, 1):
-            rospy.loginfo("  %02d: [%.3f, %.3f, %.3f]", index, point[0], point[1], point[2])
+            logger.info("  %02d: [%.3f, %.3f, %.3f]", index, point[0], point[1], point[2])
 
     def build_yaml(self):
         lines = ["fsm:", "  waypoint_num: {}".format(len(self.waypoints))]
@@ -142,7 +143,7 @@ class KeypointRecorder:
 
     def save(self):
         atomic_write(self.output_path, self.build_yaml())
-        rospy.loginfo("Saved %d waypoint(s) to %s", len(self.waypoints), self.output_path)
+        logger.info("Saved %d waypoint(s) to %s", len(self.waypoints), self.output_path)
 
     def print_help(self):
         print("")
@@ -163,7 +164,7 @@ class KeypointRecorder:
 
     def prompt_index(self, old_settings, action):
         if not self.waypoints:
-            rospy.logwarn("No waypoint to %s.", action)
+            logger.warning("No waypoint to %s.", action)
             return None
 
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
@@ -174,17 +175,17 @@ class KeypointRecorder:
                 return None
             return int(text)
         except ValueError:
-            rospy.logwarn("Invalid waypoint index: %s", text)
+            logger.warning("Invalid waypoint index: %s", text)
             return None
         finally:
             tty.setcbreak(sys.stdin.fileno())
 
     def run(self):
         self.print_help()
-        rospy.loginfo("Waiting for odometry on %s ...", self.odom_topic)
+        logger.info("Waiting for odometry on %s ...", self.odom_topic)
 
         if not sys.stdin.isatty():
-            rospy.logerr("stdin is not a TTY; keyboard control is required.")
+            logger.error("stdin is not a TTY; keyboard control is required.")
             return
 
         old_settings = termios.tcgetattr(sys.stdin)
@@ -239,6 +240,8 @@ def main():
     args = parser.parse_args(strip_ros_args(sys.argv[1:]))
 
     rospy.init_node("keypoint_recorder")
+    global logger
+    logger = configure("keypoint_recorder")
     recorder = KeypointRecorder(args)
     recorder.run()
 

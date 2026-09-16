@@ -1,4 +1,5 @@
 #include <pcl/filters/filter.h>
+#include <motion_planner_log/logging.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_cloud.h>
@@ -12,6 +13,8 @@
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "map_pub");
+  motion_planner_log::initialize("map_publisher", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: map publisher.");
   ros::NodeHandle node;
   ros::NodeHandle private_node("~");
 
@@ -36,14 +39,18 @@ int main(int argc, char** argv) {
   private_node.param("map_offset_y", map_offset_y, 0.0);
   private_node.param("map_offset_z", map_offset_z, 0.0);
 
+  MOTION_PLANNER_LOG_INFO("Configuration: file=%s topic=%s frame=%s rate=%.2f Hz downsample=%.3f",
+                         file_name.c_str(), cloud_topic.c_str(), frame_id.c_str(), publish_rate,
+                         downsample_res);
+
   if (file_name.empty()) {
-    ROS_ERROR("[map_pub] No PCD file specified. Pass it as an arg or set ~file_name.");
+    MOTION_PLANNER_LOG_ERROR("No PCD file specified. Pass it as an arg or set ~file_name.");
     return 1;
   }
 
   pcl::PointCloud<pcl::PointXYZ> cloud;
   if (pcl::io::loadPCDFile<pcl::PointXYZ>(file_name, cloud) < 0) {
-    ROS_ERROR_STREAM("[map_pub] Failed to read PCD file: " << file_name);
+    MOTION_PLANNER_LOG_ERROR_STREAM("Failed to read PCD file: " << file_name);
     return 1;
   }
 
@@ -66,7 +73,7 @@ int main(int argc, char** argv) {
   }
 
   if (cloud.empty()) {
-    ROS_ERROR_STREAM("[map_pub] PCD file has no valid XYZ points: " << file_name);
+    MOTION_PLANNER_LOG_ERROR_STREAM("PCD file has no valid XYZ points: " << file_name);
     return 1;
   }
 
@@ -81,7 +88,7 @@ int main(int argc, char** argv) {
   ros::Publisher cloud_pub =
       node.advertise<sensor_msgs::PointCloud2>(cloud_topic, 10, true);
 
-  ROS_INFO_STREAM("[map_pub] Loaded " << cloud.points.size() << " points from " << file_name
+  MOTION_PLANNER_LOG_INFO_STREAM("Loaded " << cloud.points.size() << " points from " << file_name
                                       << ", publishing " << cloud_topic << " in frame "
                                       << frame_id);
 

@@ -4,6 +4,7 @@ Use of this source code is governed by the MPL-2.0 license, see LICENSE.
 ************************************************************************/
 
 #include <ignition/math/Color.hh>
+#include <motion_planner_log/logging.h>
 #include <gazebo/common/Events.hh>
 #include <gazebo/msgs/msgs.hh>
 #include <gazebo/transport/Node.hh>
@@ -32,7 +33,6 @@ namespace gazebo
             this->visual = _parent;
             this->visual_namespace = "visual/";
             if (!_sdf->HasElement("topicName")){
-                ROS_INFO("Force draw plugin missing <topicName>, defaults to /default_force_draw");
                 this->topic_name = "/default_force_draw";
             } else{
                 this->topic_name = _sdf->Get<std::string>("topicName");
@@ -41,7 +41,11 @@ namespace gazebo
                 int argc = 0;
                 char** argv = NULL;
                 ros::init(argc,argv,"gazebo_visual",ros::init_options::NoSigintHandler|ros::init_options::AnonymousName);
+                motion_planner_log::initialize("pct_scan_gazebo_draw_force");
             }
+            motion_planner_log::initialize("pct_scan_gazebo_draw_force");
+            if (!_sdf->HasElement("topicName"))
+                MOTION_PLANNER_LOG_WARN("Force draw plugin missing <topicName>; using /default_force_draw");
 
             this->line = this->visual->CreateDynamicLine(rendering::RENDERING_LINE_STRIP);
 #if GAZEBO_MAJOR_VERSION >= 10
@@ -61,7 +65,7 @@ namespace gazebo
             this->rosnode = new ros::NodeHandle(this->visual_namespace);
             this->force_sub = this->rosnode->subscribe(this->topic_name+"/"+"the_force", 30, &UnitreeDrawForcePlugin::GetForceCallback, this);
             this->update_connection = event::Events::ConnectPreRender(boost::bind(&UnitreeDrawForcePlugin::OnUpdate, this));
-            ROS_INFO("Load %s Draw Force plugin.", this->topic_name.c_str());
+            MOTION_PLANNER_LOG_INFO("Load %s Draw Force plugin.", this->topic_name.c_str());
         }
 
         void OnUpdate()

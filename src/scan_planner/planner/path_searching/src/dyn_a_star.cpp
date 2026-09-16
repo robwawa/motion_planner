@@ -1,4 +1,5 @@
 #include "path_searching/dyn_a_star.h"
+#include <motion_planner_log/logging.h>
 #include <algorithm>
 #include <cmath>
 
@@ -104,7 +105,7 @@ bool AStar::ConvertToIndexAndAdjustStartEndPoints(Vector3d start_pt, Vector3d en
     int occ = checkOccupancy(Index2Coord(start_idx), path_yaw);
     if (occ)
     {
-        //ROS_WARN("Start point is insdide an obstacle.");
+        //MOTION_PLANNER_LOG_WARN("Start point is insdide an obstacle.");
         do
         {
             start_pt -= start_to_end * step_size_;
@@ -114,7 +115,7 @@ bool AStar::ConvertToIndexAndAdjustStartEndPoints(Vector3d start_pt, Vector3d en
             occ = checkOccupancy(Index2Coord(start_idx), path_yaw);
             if (occ == -1)
             {
-                ROS_WARN("[Astar] Start point outside the map region.");
+                MOTION_PLANNER_LOG_WARN("Start point outside the map region.");
                 return false;
             }
         } while (occ);
@@ -123,7 +124,7 @@ bool AStar::ConvertToIndexAndAdjustStartEndPoints(Vector3d start_pt, Vector3d en
     occ = checkOccupancy(Index2Coord(end_idx), path_yaw);
     if (occ)
     {
-        //ROS_WARN("End point is insdide an obstacle.");
+        //MOTION_PLANNER_LOG_WARN("End point is insdide an obstacle.");
         do
         {
             end_pt += start_to_end * step_size_;
@@ -133,7 +134,7 @@ bool AStar::ConvertToIndexAndAdjustStartEndPoints(Vector3d start_pt, Vector3d en
             occ = checkOccupancy(Index2Coord(end_idx), path_yaw);
             if (occ == -1)
             {
-                ROS_WARN("[Astar] End point outside the map region.");
+                MOTION_PLANNER_LOG_WARN("End point outside the map region.");
                 return false;
             }
         } while (occ);
@@ -154,7 +155,7 @@ ASTAR_RET AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d
     Vector3i start_idx, end_idx;
     if (!ConvertToIndexAndAdjustStartEndPoints(start_pt, end_pt, start_idx, end_idx))
     {
-        ROS_ERROR("Unable to handle the initial or end point, force return!");
+        MOTION_PLANNER_LOG_ERROR("Unable to handle the initial or end point, force return!");
         return ASTAR_RET::INIT_ERR;
     }
 
@@ -214,9 +215,9 @@ ASTAR_RET AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d
         if (current->index(0) == endPtr->index(0) && current->index(1) == endPtr->index(1) && current->index(2) == endPtr->index(2))
         {
             // ros::Time time_2 = ros::Time::now();
-            // printf("\033[34mA star iter:%d, time:%.3f\033[0m\n",num_iter, (time_2 - time_1).toSec()*1000);
+            // Iteration timing is intentionally omitted from normal runtime logs.
             // if((time_2 - time_1).toSec() > 0.1)
-            //     ROS_WARN("Time consume in A star path finding is %f", (time_2 - time_1).toSec() );
+            //     MOTION_PLANNER_LOG_WARN("Time consume in A star path finding is %f", (time_2 - time_1).toSec() );
             gridPath_ = retrievePath(current);
             return ASTAR_RET::SUCCESS;
         }
@@ -279,7 +280,7 @@ ASTAR_RET AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d
         ros::Time time_2 = ros::Time::now();
         if ((time_2 - time_1).toSec() > 0.2)
         {
-            ROS_WARN("Failed in A star path searching !!! 0.2 seconds time limit exceeded.");
+            MOTION_PLANNER_LOG_WARN("Failed in A star path searching !!! 0.2 seconds time limit exceeded.");
             return ASTAR_RET::SEARCH_ERR;
         }
     }
@@ -287,7 +288,7 @@ ASTAR_RET AStar::AstarSearch(const double step_size, Vector3d start_pt, Vector3d
     ros::Time time_2 = ros::Time::now();
 
     if ((time_2 - time_1).toSec() > 0.1)
-        ROS_WARN("Time consume in A star path finding is %.3fs, iter=%d", (time_2 - time_1).toSec(), num_iter);
+        MOTION_PLANNER_LOG_WARN("Time consume in A star path finding is %.3fs, iter=%d", (time_2 - time_1).toSec(), num_iter);
 
     return ASTAR_RET::SEARCH_ERR;
 }

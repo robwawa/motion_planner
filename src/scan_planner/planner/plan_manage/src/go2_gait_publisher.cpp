@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <motion_planner_log/logging.h>
 #include <array>
 #include <cmath>
 #include <string>
@@ -44,6 +45,8 @@ class Go2GaitPublisher {
         "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"};
     joint_msg_.position.resize(joint_msg_.name.size(), 0.0);
     joint_msg_.velocity.resize(joint_msg_.name.size(), 0.0);
+    MOTION_PLANNER_LOG_INFO("Ready: body_pose_topic=%s joint_topic=%s rate=%.1f Hz gait_frequency=%.2f Hz",
+                           body_pose_topic.c_str(), joint_topic.c_str(), rate_, gait_frequency_);
   }
 
  private:
@@ -172,6 +175,8 @@ class Go2GaitPublisher {
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "go2_gait_publisher");
+  motion_planner_log::initialize("go2_gait_publisher", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: Go2 gait publisher.");
   Go2GaitPublisher publisher;
   ros::spin();
   return 0;

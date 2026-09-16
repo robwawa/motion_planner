@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 """TorchScript policy runner for the A1 Gazebo simulation only."""
+import os
+import sys
 import threading
+
 import rospy
-import torch
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
-from pct_scan_gazebo.msg import MotorCmd, MotorState
+from motion_planner_log import configure
+
+logger = configure("a1_rl_policy")
+
+try:
+    import torch
+    from geometry_msgs.msg import Twist
+    from nav_msgs.msg import Odometry
+    from pct_scan_gazebo.msg import MotorCmd, MotorState
+except ImportError as exc:
+    logger.error(
+        "RL node dependency import failed with Python=%s: %s. "
+        "Set CONDA_ENV_PATH to a Python environment containing PyTorch and ROS messages.",
+        sys.executable, exc)
+    raise SystemExit(1)
 
 JOINTS = ("FR_hip", "FR_thigh", "FR_calf", "FL_hip", "FL_thigh", "FL_calf",
           "RR_hip", "RR_thigh", "RR_calf", "RL_hip", "RL_thigh", "RL_calf")
@@ -51,7 +65,12 @@ class Policy:
         rate = rospy.Rate(50)
         while not rospy.is_shutdown():
             with self.lock:
-                if not (self.have_joints and self.have_odom): rate.sleep(); continue
+                if not (self.have_joints and self.have_odom):
+                    logger.warning_throttle(
+                        5.0, "RL policy waiting for inputs: joints=%s odom=%s",
+                        self.have_joints, self.have_odom)
+                    rate.sleep()
+                    continue
                 q, dq, quat, omega, cmd = self.q.clone(), self.dq.clone(), self.quat.clone(), self.omega.clone(), self.cmd.clone()
             ordered_q, ordered_dq = q[REINDEX], dq[REINDEX]
             obs = torch.cat((self.inv_rotate(quat, omega) * .25, self.inv_rotate(quat, torch.tensor([0., 0., -1.])),
@@ -66,4 +85,24 @@ class Policy:
 
 if __name__ == "__main__":
     rospy.init_node("a1_rl_policy")
-    Policy().run()
+    model_path = rospy.get_param("~model", "")
+    if not model_path or not os.path.isfile(model_path):
+        logger.error(
+            "RL policy model does not exist: %s (Python=%s). "
+            "Check the launch model argument and install/share/pct_scan_gazebo resources.",
+            model_path or "<empty>", sys.executable)
+        raise SystemExit(1)
+
+    try:
+        policy = Policy()
+    except Exception:
+        logger.exception(
+            "Failed to initialize RL policy: model=%s Python=%s. "
+            "Check CONDA_ENV_PATH and the TorchScript model.",
+            model_path, sys.executable)
+        raise SystemExit(1)
+
+    logger.info(
+        "Ready: policy node initialized with Python=%s model=%s device=%s",
+        sys.executable, model_path, policy.device)
+    policy.run()

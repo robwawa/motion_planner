@@ -1,4 +1,5 @@
 #include "gazebo_msgs/LinkStates.h"
+#include <motion_planner_log/logging.h>
 #include "gazebo_msgs/ModelStates.h"
 #include "geometry_msgs/TransformStamped.h"
 #include "ros/ros.h"
@@ -26,7 +27,7 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
         ++index;
     }
     if (index == static_cast<int>(msg->name.size())) {
-        ROS_WARN_THROTTLE(2.0, "Gazebo base link for %s was not found", robot_name.c_str());
+        MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "Gazebo base link for %s was not found", robot_name.c_str());
         return;
     }
 
@@ -102,6 +103,8 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "state_from_gazebo");
+  motion_planner_log::initialize("state_from_gazebo", argv[0]);
+    MOTION_PLANNER_LOG_INFO("Node starting: Gazebo state bridge.");
     ros::NodeHandle nh("~");
     ros::NodeHandle node;
     ros::Subscriber tfState_BASE_sub;
@@ -110,7 +113,7 @@ int main(int argc, char **argv) {
 
     if (argc != 7)   // x y z yaw pitch roll
     {
-        ROS_ERROR("Usage: static_transform_publisher x y z yaw pitch roll");
+        MOTION_PLANNER_LOG_ERROR("Usage: static_transform_publisher x y z yaw pitch roll");
         return -1;
     }
 
@@ -143,6 +146,8 @@ int main(int argc, char **argv) {
     nh.param<std::string>("robot_name", robot_name, string("a1"));
     tfState_BASE_sub = node.subscribe<gazebo_msgs::LinkStates>("/gazebo/link_states", 10, callback_BASE);
     robotVelocity_BASE_frame_pub = node.advertise<nav_msgs::Odometry>("/Odometry_gazebo", 1);
+    MOTION_PLANNER_LOG_INFO("Gazebo state bridge ready: robot=%s link_states=/gazebo/link_states output=/Odometry_gazebo",
+                            robot_name.c_str());
 
     ros::spin();
     return 0;

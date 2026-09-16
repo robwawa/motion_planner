@@ -6,6 +6,7 @@
 #define SRC_GAZEBO_CSV_READER_HPP
 
 #include <fstream>
+#include <motion_planner_log/logging.h>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -31,15 +32,15 @@ class CsvReader {
                         data.push_back(std::stod(value));
                     }
                 } catch (...) {
-                    std::cerr << "cannot convert str:" << line_str << "\n";
+                    MOTION_PLANNER_LOG_ERROR_STREAM("cannot convert str:" << line_str);
                     continue;
                 }
                 datas.push_back(data);
             }
-            std::cerr << "data size:" << datas.size() << "\n";
+            MOTION_PLANNER_LOG_DEBUG_STREAM("Livox CSV rows loaded: count=" << datas.size());
             return true;
         } else {
-            std::cerr << "cannot read csv file!" << file_name << "\n";
+            MOTION_PLANNER_LOG_ERROR_STREAM("Cannot read CSV file: path=" << file_name);
         }
         return false;
     }

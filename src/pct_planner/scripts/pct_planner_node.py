@@ -19,6 +19,7 @@ import sensor_msgs.point_cloud2 as pc2
 from std_msgs.msg import Bool, Header, UInt64
 
 from pct_planner.msg import PlanPath3DAction, PlanPath3DFeedback, PlanPath3DResult
+from motion_planner_log import configure
 
 
 def package_path():
@@ -72,7 +73,7 @@ class PCTActionServer:
         self.path_pub = rospy.Publisher('/pct/global_path', Path, latch=True, queue_size=1)
         self.planner = TomogramPlanner(Config())
         self.planner.traversable_cost_threshold = load_public_profile().trav.cost_threshold
-        rospy.loginfo('[pct_planner] public traversability cost_threshold=%.3f',
+        logger.info('public traversability cost_threshold=%.3f',
                       self.planner.traversable_cost_threshold)
         self.tomogram_name = tomogram_name
         tomogram_path = os.path.join(package_root, 'rsc', 'tomogram',
@@ -81,7 +82,7 @@ class PCTActionServer:
         while not os.path.isfile(tomogram_path):
             if time.monotonic() >= deadline:
                 raise RuntimeError('timed out waiting for tomogram: {}'.format(tomogram_path))
-            rospy.loginfo_throttle(5.0, '[pct_planner] waiting for tomogram: %s', tomogram_path)
+            logger.info_throttle(5.0, 'waiting for tomogram: %s', tomogram_path)
             time.sleep(0.2)
         self.planner.loadTomogram(self.tomogram_name)
         self.dynamic_enabled = rospy.get_param('~dynamic_replan/enabled', False)
@@ -89,6 +90,7 @@ class PCTActionServer:
         self.last_dynamic_snapshot_received = 0.0
         self.dynamic_source_timeout = 0.5
         self.dynamic_source_healthy = False
+        self._last_dynamic_source_healthy = None
         self.max_debug_points = int(rospy.get_param(
             '~dynamic_replan/max_debug_points', 100000))
         self.dynamic_ok_pub = rospy.Publisher(
@@ -103,7 +105,7 @@ class PCTActionServer:
             try:
                 self._init_dynamic_replan()
             except (MemoryError, ValueError) as exc:
-                rospy.logerr('[pct_planner] dynamic replan disabled: %s', exc)
+                logger.error('dynamic replan disabled: %s', exc)
                 self.dynamic_enabled = False
                 self.dynamic_ok_pub.publish(Bool(data=False))
         else:
@@ -113,7 +115,7 @@ class PCTActionServer:
         self.server = actionlib.SimpleActionServer(
             '/pct/plan_path', PlanPath3DAction, execute_cb=self.execute, auto_start=False)
         self.server.start()
-        rospy.loginfo('[pct_planner] ready: tomogram=%s frame=%s',
+        logger.info('Ready: tomogram=%s frame=%s',
                       self.tomogram_name, navigation_frame)
 
     def _init_dynamic_replan(self):
@@ -155,12 +157,19 @@ class PCTActionServer:
         self.debug_timer = rospy.Timer(rospy.Duration(1.0 / debug_rate), self._debug_cb)
         self.dynamic_ok_pub.publish(Bool(data=False))
         cells = int(np.prod(self.dynamic_layer.shape, dtype=np.int64))
-        rospy.loginfo(
-            '[pct_planner] dynamic layer enabled: shape=%s cells=%d state=%.2f MiB',
+        logger.info(
+            'dynamic layer enabled: shape=%s cells=%d state=%.2f MiB',
             self.dynamic_layer.shape, cells, cells * 6.0 / (1024.0 * 1024.0))
 
     def _dynamic_health_cb(self, msg):
         self.dynamic_source_healthy = bool(msg.data)
+        if (self._last_dynamic_source_healthy is not None and
+                self.dynamic_source_healthy != self._last_dynamic_source_healthy):
+            if self.dynamic_source_healthy:
+                logger.info('Dynamic perception input recovered.')
+            else:
+                logger.warning('Dynamic perception input became unhealthy; clearing projection.')
+        self._last_dynamic_source_healthy = self.dynamic_source_healthy
         if not self.dynamic_source_healthy:
             self.last_dynamic_snapshot_received = 0.0
             if self.dynamic_layer.clear():
@@ -190,8 +199,8 @@ class PCTActionServer:
 
     def _dynamic_cloud_cb(self, msg):
         if not self.dynamic_source_healthy:
-            rospy.logwarn_throttle(
-                2.0, '[pct_planner] dynamic cloud ignored: perception source is unhealthy')
+            logger.warning_throttle(
+                2.0, 'dynamic cloud ignored: perception source is unhealthy')
             return
         try:
             if msg.header.frame_id != self.navigation_frame:
@@ -204,7 +213,7 @@ class PCTActionServer:
             self.dynamic_ok_pub.publish(Bool(data=True))
         except Exception as exc:
             self.dynamic_ok_pub.publish(Bool(data=False))
-            rospy.logwarn_throttle(2.0, '[pct_planner] dynamic cloud rejected: %s', exc)
+            logger.warning_throttle(2.0, 'dynamic cloud rejected: %s', exc)
 
     def _decay_cb(self, _event):
         if (self.last_dynamic_snapshot_received and
@@ -215,8 +224,8 @@ class PCTActionServer:
             if self.dynamic_layer.clear():
                 self.dynamic_version_pub.publish(UInt64(data=self.dynamic_layer.version))
             self.dynamic_ok_pub.publish(Bool(data=False))
-            rospy.logwarn_throttle(
-                2.0, '[pct_planner] dynamic perception source timed out; projection cleared')
+            logger.warning_throttle(
+                2.0, 'dynamic perception source timed out; projection cleared')
 
     def _debug_cb(self, _event):
         header = Header(stamp=rospy.Time.now(), frame_id=self.navigation_frame)
@@ -325,8 +334,8 @@ class PCTActionServer:
                             goal_distance, goal_layer)
             start_index = self.planner.pos2idx(start_position[:2]).astype(int)
             goal_index = self.planner.pos2idx(goal_position[:2]).astype(int)
-            rospy.loginfo(
-                '[pct_planner] raw start=(%.2f, %.2f, %.2f), goal=(%.2f, %.2f, %.2f); '
+            logger.info(
+                'raw start=(%.2f, %.2f, %.2f), goal=(%.2f, %.2f, %.2f); '
                 'snapped start=(%.2f, %.2f, %.2f) layer=%d grid=(%d,%d) dist=%.2f; '
                 'goal=(%.2f, %.2f, %.2f) layer=%d grid=(%d,%d) dist=%.2f',
                 goal.start.pose.position.x, goal.start.pose.position.y, goal.start.pose.position.z,
@@ -350,10 +359,10 @@ class PCTActionServer:
                         dynamic_cost, planning_version = self.dynamic_layer.snapshot()
                         self.planner.set_dynamic_cost_snapshot(
                             dynamic_cost, planning_version, self.dynamic_layer.lethal_cost)
-                    rospy.loginfo('[pct_planner] dynamic layer changed during planning; retry version %d',
+                    logger.debug('dynamic layer changed during planning; retry version %d',
                                   planning_version)
             if self.dynamic_enabled and self.dynamic_layer.version != planning_version:
-                rospy.logwarn('[pct_planner] dynamic layer remained unstable after %d retries; '
+                logger.warning('dynamic layer remained unstable after %d retries; '
                               'reject stale path', self.max_snapshot_retries)
                 trajectory = None
             planning_elapsed_ms = (time.monotonic() - planning_start) * 1000.0
@@ -364,11 +373,11 @@ class PCTActionServer:
                     'preempted')
                 return
             if trajectory is None or len(trajectory) < 2:
-                rospy.logwarn('[pct_planner] A* failed in %.1f ms.', planning_elapsed_ms)
+                logger.warning('A* failed in %.1f ms.', planning_elapsed_ms)
                 self.fail(PlanPath3DResult.NO_PATH, 'PCT did not find a path',
                           snapped_start, snapped_goal)
                 return
-            rospy.loginfo('[pct_planner] A* found %d points in %.1f ms.',
+            logger.info('A* found %d points in %.1f ms.',
                           len(trajectory), planning_elapsed_ms)
             self.feedback('publishing')
             path = self.to_path(trajectory, goal.goal)
@@ -388,7 +397,7 @@ class PCTActionServer:
         except ValueError as exc:
             self.fail(PlanPath3DResult.OUT_OF_MAP, str(exc), snapped_start, snapped_goal)
         except Exception as exc:  # native extension errors must not crash a navigation client
-            rospy.logerr('[pct_planner] planning failed: %s', exc)
+            logger.error('planning failed: %s', exc)
             self.fail(PlanPath3DResult.INTERNAL_ERROR, str(exc), snapped_start, snapped_goal)
 
     def to_path(self, trajectory, goal):
@@ -415,6 +424,8 @@ def main():
     parser.add_argument('--tomogram-name', required=True)
     args, _ = parser.parse_known_args()
     rospy.init_node('pct_planner')
+    global logger
+    logger = configure('pct_planner')
     PCTActionServer(rospy.get_param('~navigation_frame', 'map'),
                     rospy.get_param('~body_height', 0.4),
                     rospy.get_param('~layer_height_tolerance', 0.75),

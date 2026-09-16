@@ -88,6 +88,21 @@ roslaunch pct_scan_gazebo gazebo.launch \
   gui:=true paused:=false launch_rl:=true
 ```
 
+RL 控制器必须使用包含 PyTorch 的 Conda 环境。当前工程默认使用：
+
+```bash
+export CONDA_ENV_PATH=/media/wa/移动硬盘/anaconda_env/conda_envs/inspection
+source install/setup.bash
+roslaunch pct_scan_gazebo gazebo.launch launch_rl:=true
+```
+
+如果 Conda 环境路径不同，请将 `CONDA_ENV_PATH` 设置为该环境根目录；不要填写
+环境中的 `bin/python` 文件路径。基础 Gazebo 仿真不启动 RL 控制器时使用：
+
+```bash
+roslaunch pct_scan_gazebo gazebo.launch launch_rl:=false
+```
+
 确认 12 个关节控制器加载完成后，在另一终端运行规划侧车：
 
 ```bash

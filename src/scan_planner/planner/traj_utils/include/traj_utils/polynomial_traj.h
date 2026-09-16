@@ -2,6 +2,7 @@
 #define _POLYNOMIAL_TRAJ_H
 
 #include <Eigen/Eigen>
+#include <motion_planner_log/logging.h>
 #include <vector>
 
 using std::vector;
@@ -66,7 +67,7 @@ public:
     case 2:
       return czs;
     default:
-      std::cout << "\033[31mIllegal axis!\033[0m" << std::endl;
+      MOTION_PLANNER_LOG_ERROR("Illegal polynomial trajectory axis.");
     }
 
     vector<vector<double>> empty;

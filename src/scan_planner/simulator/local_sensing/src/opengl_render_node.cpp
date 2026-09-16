@@ -1,4 +1,5 @@
 #include "opengl_sim.hpp"
+#include <motion_planner_log/logging.h>
 #include <cv_bridge/cv_bridge.h>
 #include <algorithm>
 #include <cmath>
@@ -176,7 +177,7 @@ bool preparePinholeMap(const pcl::PointCloud<PointType> &raw_cloud) {
   }
 
   if (finite_cloud.empty()) {
-    ROS_ERROR("[opengl_render_node] Empty map cloud; cannot publish pinhole depth.");
+    MOTION_PLANNER_LOG_ERROR("Empty map cloud; cannot publish pinhole depth.");
     return false;
   }
 
@@ -190,7 +191,7 @@ bool preparePinholeMap(const pcl::PointCloud<PointType> &raw_cloud) {
   voxel_sampler.filter(cloud_all_map);
 
   if (cloud_all_map.empty()) {
-    ROS_ERROR("[opengl_render_node] Downsampled map cloud is empty; cannot publish pinhole depth.");
+    MOTION_PLANNER_LOG_ERROR("Downsampled map cloud is empty; cannot publish pinhole depth.");
     return false;
   }
 
@@ -201,14 +202,14 @@ bool preparePinholeMap(const pcl::PointCloud<PointType> &raw_cloud) {
   pcl::getMinMax3D(cloud_all_map, global_mapmin, global_mapmax);
   _kdtreeLocalMap.setInputCloud(cloud_all_map.makeShared());
 
-  ROS_INFO("[opengl_render_node] Pinhole depth map ready, points: %zu", cloud_all_map.points.size());
+  MOTION_PLANNER_LOG_INFO("Pinhole depth map ready, points: %zu", cloud_all_map.points.size());
   return true;
 }
 
 bool loadPinholeMapFromFile(const std::string &map_file) {
   pcl::PointCloud<PointType> raw_cloud;
   if (pcl::io::loadPCDFile<PointType>(map_file, raw_cloud) == -1) {
-    ROS_ERROR_STREAM("[opengl_render_node] Failed to read PCD file for pinhole depth: " << map_file);
+    MOTION_PLANNER_LOG_ERROR_STREAM("Failed to read PCD file for pinhole depth: " << map_file);
     return false;
   }
 
@@ -238,12 +239,12 @@ void publishLidarPose(const nav_msgs::Odometry &body_odom, const ros::Time &stam
 
 void publishPinholeDepth(const ros::Time &stamp) {
   if (cloud_all_map.empty()) {
-    ROS_WARN_THROTTLE(1.0, "[opengl_render_node] No pinhole map cloud yet; skip depth publish.");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "No pinhole map cloud yet; skip depth publish.");
     return;
   }
 
   if (cam_width <= 0 || cam_height <= 0 || cam_fx <= 0.0 || cam_fy <= 0.0) {
-    ROS_WARN_THROTTLE(1.0, "[opengl_render_node] Invalid pinhole camera intrinsics.");
+    MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "Invalid pinhole camera intrinsics.");
     return;
   }
 
@@ -531,7 +532,7 @@ void dynobjGenerate(const ros::TimerEvent &event) {
       // }
     }
 
-    ROS_INFO("dynobj points size = %d", dynobj_points_vis.points.size());
+    MOTION_PLANNER_LOG_DEBUG("Dynamic obstacle cloud contains %zu points.", dynobj_points_vis.points.size());
 
     dynobj_points_vis.width = dynobj_points_vis.points.size();
     dynobj_points_vis.height = 1;
@@ -602,13 +603,13 @@ void rcvOdometryCallback(const nav_msgs::Odometry &odom) {
           int hash_index = hash_x + hash_y * uavhash_xsize + hash_z * uavhash_xsize * uavhash_ysize;
           if (uavpoint_hashmap.find(hash_index) != uavpoint_hashmap.end()) {
             collision = true;
-            ROS_ERROR("ENVIRONMENT COLLISION DETECTED!!!");
+            MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "Environment collision detected.");
             // break;
             collision_points.points.push_back(p);
           }
         }
       } else {
-        ROS_ERROR("ENVIRONMENT COLLISION DETECTED!!!");
+        MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "Environment collision detected.");
       }
     }
     if (dynobj_enable || drone_num > 1) {
@@ -627,13 +628,13 @@ void rcvOdometryCallback(const nav_msgs::Odometry &odom) {
             hash_x + hash_y * uavhash_xsize + hash_z * uavhash_xsize * uavhash_ysize;
             if (uavpoint_hashmap.find(hash_index) != uavpoint_hashmap.end()) {
               collision = true;
-              ROS_ERROR("DYNAMIC OBSTACLES COLLISION DETECTED!!!");
+              MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "Dynamic obstacle collision detected.");
               // break;
               collision_points.points.push_back(p);
             }
           }
         } else {
-          ROS_ERROR("DYNAMIC OBSTACLES COLLISION DETECTED!!!");
+          MOTION_PLANNER_LOG_ERROR_THROTTLE(1.0, "Dynamic obstacle collision detected.");
         }
       }
     }
@@ -650,7 +651,7 @@ void rcvOdometryCallback(const nav_msgs::Odometry &odom) {
   collision_check_time_sum += (t2 - t1).toSec();
   collision_check_time_count++;
   if (collision_check_time_count == 100) {
-    // ROS_INFO("collision check time: %f", collision_check_time_sum / collision_check_time_count);
+    // MOTION_PLANNER_LOG_INFO("collision check time: %f", collision_check_time_sum / collision_check_time_count);
     collision_check_time_sum = 0;
     collision_check_time_count = 0;
   }
@@ -735,12 +736,12 @@ void rcvGlobalPointCloudCallBack(const sensor_msgs::PointCloud2 &pointcloud_map)
   if (has_global_map)
     return;
 
-  ROS_WARN("Global Pointcloud received for local sensing renderer.");
+  MOTION_PLANNER_LOG_INFO_ONCE("Global point cloud input received.");
 
   pcl::PointCloud<PointType> cloud_input;
   pcl::fromROSMsg(pointcloud_map, cloud_input);
   if (cloud_input.empty()) {
-    ROS_WARN("Received empty global pointcloud, waiting for next map.");
+    MOTION_PLANNER_LOG_WARN("Received empty global pointcloud, waiting for next map.");
     return;
   }
 
@@ -819,7 +820,7 @@ void renderSensedPoints(const ros::TimerEvent &event) {
   pub_dyncloud.publish(dynamic_input_points_pcd);
 
   // dynamic_input_points = otheruav_points_vis + dyn_points_vis;
-  // ROS_INFO("dynamic_input_points size = %d", dynamic_input_points.size());
+  // MOTION_PLANNER_LOG_INFO("dynamic_input_points size = %d", dynamic_input_points.size());
   render.input_dyn_clouds(dynamic_input_points);
 
   render.render_pointcloud(local_map, pos, quat, time_frominit);
@@ -833,7 +834,7 @@ void renderSensedPoints(const ros::TimerEvent &event) {
     totaltime_pub.pose.position.x =
     accumulate(comp_time_vec.begin(), comp_time_vec.end(), 0.0) / comp_time_vec.size();
     comp_time_pub.publish(totaltime_pub);
-    // ROS_INFO("Temp compute time = %lf, average compute time = %lf",
+    // MOTION_PLANNER_LOG_INFO("Temp compute time = %lf, average compute time = %lf",
     // comp_time_temp,totaltime_pub.pose.position.x);
   } else {
     comp_time_count++;
@@ -905,15 +906,18 @@ void renderSensedPoints(const ros::TimerEvent &event) {
 
 int main(int argc, char **argv) {
   ros::init(argc, argv, "pcl_render");
+  motion_planner_log::initialize("opengl_render_node", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: OpenGL renderer.");
   ros::NodeHandle nh("~");
 
   nh.param("quadrotor_name", quad_name, std::string("quad_0"));
   nh.param("sensor_type", sensor_type_, std::string("depth"));
   if (!useDepthSensor() && !useLidarSensor()) {
-    ROS_ERROR("Unsupported sensor_type '%s'. Expected 'depth' or 'lidar'.", sensor_type_.c_str());
+    MOTION_PLANNER_LOG_ERROR("Unsupported sensor_type '%s'. Expected 'depth' or 'lidar'.", sensor_type_.c_str());
     return 1;
   }
-  ROS_INFO("opengl_render_node sensor_type: %s", sensor_type_.c_str());
+  MOTION_PLANNER_LOG_INFO("Ready: sensor_type=%s sensing_rate=%.2f Hz estimation_rate=%.2f Hz horizon=%.2f",
+                         sensor_type_.c_str(), sensing_rate, estimation_rate, sensing_horizon);
   nh.param("is_360lidar", is_360lidar, 1);
   nh.param("sensing_horizon", sensing_horizon, 40.0);
   nh.param("sensing_rate", sensing_rate, 10.0);
@@ -984,11 +988,9 @@ int main(int argc, char **argv) {
   int pcd_read_status;
   if (use_uav_extra_model) {
     string uav_model_path;
-    uav_model_path = ros::package::getPath(
-    "odom_visualization"); //=
-                           //"/home/mars/catkin_ws2/src/Exploration_sim/octomap_mapping/octomap_server"
+    uav_model_path = ros::package::getPath("scan_planner");
     uav_model_path.append("/meshes/yunque001.pcd");
-    std::cout << "\nFound pkg_path = " << uav_model_path << std::endl;
+    MOTION_PLANNER_LOG_DEBUG_STREAM("Found pkg_path = " << uav_model_path);
 
     pcd_read_status = pcl::io::loadPCDFile<PointType>(uav_model_path, uav_extra_model);
     if (pcd_read_status == -1) {
@@ -1008,7 +1010,7 @@ int main(int argc, char **argv) {
   drone_drawpoints_num[1] = (uav_size[1] / downsample_res);
   drone_drawpoints_num[2] = (uav_size[2] / downsample_res);
   uav_points_num = drone_drawpoints_num[0] * drone_drawpoints_num[1] * drone_drawpoints_num[2];
-  ROS_INFO("drone_drawpoints_num = %d,%d,%d, Uav points num = %d", drone_drawpoints_num[0],
+  MOTION_PLANNER_LOG_DEBUG("drone_drawpoints_num = %d,%d,%d, uav_points_num = %d", drone_drawpoints_num[0],
            drone_drawpoints_num[1], drone_drawpoints_num[2], uav_points_num);
 
   // render.setParameters(400,400,250,250,downsample_res,0.1,sensing_horizon,sensing_rate,use_avia_pattern);
@@ -1028,7 +1030,7 @@ int main(int argc, char **argv) {
     global_map_sub = nh.subscribe("global_map", 1, rcvGlobalPointCloudCallBack);
   } else {
     if (argc < 2) {
-      ROS_ERROR("opengl_render_node requires a PCD file argument unless ~use_global_map_topic is true.");
+      MOTION_PLANNER_LOG_ERROR("opengl_render_node requires a PCD file argument unless ~use_global_map_topic is true.");
       return 1;
     }
     file_name = argv[1];
@@ -1052,11 +1054,11 @@ int main(int argc, char **argv) {
     }
 
     if (cloud_all_map.empty()) {
-      ROS_ERROR("Global map is empty.");
+      MOTION_PLANNER_LOG_ERROR("Global map is empty.");
       return 0;
     }
 
-    ROS_INFO("Global map and kdtree ready.");
+    MOTION_PLANNER_LOG_INFO("Global map and kdtree ready.");
 
     if (use_uav_extra_model) {
       // get max and min xyz of uav model
@@ -1075,7 +1077,7 @@ int main(int argc, char **argv) {
         uavpoint_hashmap[hash] = true;
       }
 
-      ROS_INFO("UAV model read and input hash map done. UAV model size = %d,%d,%d", uavhash_xsize,
+      MOTION_PLANNER_LOG_INFO("UAV model read and input hash map done. UAV model size = %d,%d,%d", uavhash_xsize,
                uavhash_ysize, uavhash_zsize);
     }
   }
@@ -1095,7 +1097,7 @@ int main(int argc, char **argv) {
     map_max(1) = global_mapmax.y;
     map_max(2) = global_mapmax.z;
 
-    // ROS_INFO("Global map min x = %f, max x = %f" , global_mapmin.x , global_mapmax.x);
+    // MOTION_PLANNER_LOG_INFO("Global map min x = %f, max x = %f" , global_mapmin.x , global_mapmax.x);
 
     // dynamic objects initial pos generate
     srand((unsigned)time(NULL));

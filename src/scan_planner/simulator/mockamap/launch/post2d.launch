@@ -1,5 +1,5 @@
 <launch>
-  <node pkg="mockamap" type="mockamap_node" name="mockamap_node" output="screen">
+  <node pkg="scan_planner" type="mockamap_node" name="mockamap_node" output="screen">
   <param name="seed" type="int" value="511"/>
   <param name="update_freq" type="double" value="1.0"/>
 
@@ -20,6 +20,6 @@
   </node>
   <!-- Launch RViz with the demo configuration -->
   <node name="rviz" pkg="rviz" type="rviz"
-        args="-d $(find mockamap)/config/rviz.rviz"
+        args="-d $(find scan_planner)/config/mockamap/rviz.rviz"
         />
 </launch>

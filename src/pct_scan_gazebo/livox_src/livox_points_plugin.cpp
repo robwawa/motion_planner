@@ -3,6 +3,7 @@
 //
 
 #include "livox_laser_simulation/livox_points_plugin.h"
+#include <motion_planner_log/logging.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
 #include <gazebo/physics/Model.hh>
@@ -33,32 +34,38 @@ void convertDataToRotateInfo(const std::vector<std::vector<double>> &datas, std:
             avia_infos.back().azimuth = data[1] * deg_2_rad;
             avia_infos.back().zenith = data[2] * deg_2_rad - M_PI_2;  //转化成标准的右手系角度
         } else {
-            ROS_INFO_STREAM("data size is not 3!");
+            MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "Ignore malformed Livox CSV row: expected 3 fields.");
         }
     }
 }
 
 void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr sdf) {
+    int argc = 0;
+    char **argv = nullptr;
+    auto curr_scan_topic = sdf->Get<std::string>("ros_topic");
+    if (!ros::isInitialized()) ros::init(argc, argv, curr_scan_topic);
+    motion_planner_log::initialize("pct_scan_gazebo_livox");
+
     std::vector<std::vector<double>> datas;
     // std::string file_name = sdf->Get<std::string>("csv_file_name");
-    // ROS_INFO_STREAM("load csv file name:" << file_name);
+    // MOTION_PLANNER_LOG_INFO_STREAM("load csv file name:" << file_name);
     // if (!CsvReader::ReadCsvFile(file_name, datas)) {
-    //     ROS_INFO_STREAM("cannot get csv file!" << file_name << "will return !");
+    //     MOTION_PLANNER_LOG_INFO_STREAM("cannot get csv file!" << file_name << "will return !");
     //     return;
     // }
     // 修改的版本
     std::string csv_file_name = sdf->Get<std::string>("csv_file_name");
     {
-        ROS_INFO_STREAM("load csv file name:" << csv_file_name);
+        MOTION_PLANNER_LOG_INFO_STREAM("Loading Livox CSV: path=" << csv_file_name);
     }
     std::string resolved_csv_file_name = sdf::findFile(csv_file_name, true, true);
     if (resolved_csv_file_name.empty())
     {
-        ROS_INFO_STREAM("cannot resolve csv file!" << csv_file_name << "will return !");
+        MOTION_PLANNER_LOG_ERROR_STREAM("Cannot resolve Livox CSV: path=" << csv_file_name);
         return;
     }   
     if (!CsvReader::ReadCsvFile(resolved_csv_file_name, datas)) {
-        ROS_INFO_STREAM("cannot get csv file!" << resolved_csv_file_name << "will return !");
+        MOTION_PLANNER_LOG_ERROR_STREAM("Cannot read Livox CSV: path=" << resolved_csv_file_name);
         return;
     }
 
@@ -69,11 +76,7 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     auto scanElem = rayElem->GetElement("scan");
     auto rangeElem = rayElem->GetElement("range");
 
-    int argc = 0;
-    char **argv = nullptr;
-    auto curr_scan_topic = sdf->Get<std::string>("ros_topic");
-    ROS_INFO_STREAM("ros topic name:" << curr_scan_topic);
-    ros::init(argc, argv, curr_scan_topic);
+    MOTION_PLANNER_LOG_INFO_STREAM("Livox plugin configured: topic=" << curr_scan_topic);
     rosNode.reset(new ros::NodeHandle);
     rosPointPub = rosNode->advertise<sensor_msgs::PointCloud>(curr_scan_topic, 5);
 
@@ -86,7 +89,7 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     scanPub = node->Advertise<msgs::LaserScanStamped>(_parent->Topic(), 50);
     aviaInfos.clear();
     convertDataToRotateInfo(datas, aviaInfos);
-    ROS_INFO_STREAM("scan info size:" << aviaInfos.size());
+    MOTION_PLANNER_LOG_INFO_STREAM("Livox scan pattern loaded: samples=" << aviaInfos.size());
     maxPointSize = aviaInfos.size();
 
     RayPlugin::Load(_parent, sdfPtr);
@@ -105,8 +108,8 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     if (downSample < 1) {
         downSample = 1;
     }
-    ROS_INFO_STREAM("sample:" << samplesStep);
-    ROS_INFO_STREAM("downsample:" << downSample);
+    MOTION_PLANNER_LOG_INFO_STREAM("Livox ray configuration: samples=" << samplesStep
+                                   << " downsample=" << downSample);
     rayShape->RayShapes().reserve(samplesStep / downSample);
     rayShape->Load(sdfPtr);
     rayShape->Init();
@@ -182,7 +185,7 @@ void LivoxPointsPlugin::OnNewLaserScans() {
                 scan_points.back().z = point.Z();
             //} else {
 
-            //    //                ROS_INFO_STREAM("count is wrong:" << verticle_index << "," << verticalRayCount << ","
+            //    //                MOTION_PLANNER_LOG_INFO_STREAM("count is wrong:" << verticle_index << "," << verticalRayCount << ","
             //    //                << horizon_index
             //    //                          << "," << rayCount << "," << pair.second.zenith << "," <<
             //    //                          pair.second.azimuth);
@@ -190,7 +193,7 @@ void LivoxPointsPlugin::OnNewLaserScans() {
         }
         if (scanPub && scanPub->HasConnections()) scanPub->Publish(laserMsg);
         rosPointPub.publish(scan_point);
-        ROS_INFO_ONCE("Livox point cloud publishing on /scan");
+        MOTION_PLANNER_LOG_INFO_ONCE("Livox point cloud publishing on /scan");
         ros::spinOnce();
     }
 }
@@ -416,7 +419,7 @@ void LivoxPointsPlugin::SendRosTf(const ignition::math::Pose3d &pose, const std:
 //             avia_infos.back().zenith = data[2] * deg_2_rad - M_PI_2;  //  转化成标准的右手系角度
 //             avia_infos.back().line = i % 6;
 //         } else {
-//             ROS_INFO_STREAM("data size is not 3!");
+//             MOTION_PLANNER_LOG_INFO_STREAM("data size is not 3!");
 //         }
 //     }
 // }
@@ -424,9 +427,9 @@ void LivoxPointsPlugin::SendRosTf(const ignition::math::Pose3d &pose, const std:
 // void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr sdf) {
 //     std::vector<std::vector<double>> datas;
 //     std::string file_name = "/home/amov/qrc_ws/src/livox_laser_simulation/scan_mode/mid360.csv";
-//     ROS_INFO_STREAM("load csv file name:" << file_name);
+//     MOTION_PLANNER_LOG_INFO_STREAM("load csv file name:" << file_name);
 //     if (!CsvReader::ReadCsvFile(file_name, datas)) {
-//         ROS_INFO_STREAM("cannot get csv file!" << file_name << "will return !");
+//         MOTION_PLANNER_LOG_INFO_STREAM("cannot get csv file!" << file_name << "will return !");
 //         return;
 //     }
 //     sdfPtr = sdf;
@@ -437,7 +440,7 @@ void LivoxPointsPlugin::SendRosTf(const ignition::math::Pose3d &pose, const std:
 //     int argc = 0;
 //     char **argv = nullptr;
 //     auto curr_scan_topic = sdf->Get<std::string>("ros_topic");
-//     ROS_INFO_STREAM("ros topic name:" << curr_scan_topic);
+//     MOTION_PLANNER_LOG_INFO_STREAM("ros topic name:" << curr_scan_topic);
 
 //     raySensor = _parent;
 //     auto sensor_pose = raySensor->Pose();
@@ -448,7 +451,7 @@ void LivoxPointsPlugin::SendRosTf(const ignition::math::Pose3d &pose, const std:
 //     scanPub = node->Advertise<msgs::LaserScanStamped>(_parent->Topic(), 50);
 //     aviaInfos.clear();
 //     convertDataToRotateInfo(datas, aviaInfos);
-//     ROS_INFO_STREAM("scan info size:" << aviaInfos.size());
+//     MOTION_PLANNER_LOG_INFO_STREAM("scan info size:" << aviaInfos.size());
 //     maxPointSize = aviaInfos.size();
 
 //     RayPlugin::Load(_parent, sdfPtr);
@@ -466,8 +469,8 @@ void LivoxPointsPlugin::SendRosTf(const ignition::math::Pose3d &pose, const std:
 //     if (downSample < 1) {
 //         downSample = 1;
 //     }
-//     ROS_INFO_STREAM("sample:" << samplesStep);
-//     ROS_INFO_STREAM("downsample:" << downSample);
+//     MOTION_PLANNER_LOG_INFO_STREAM("sample:" << samplesStep);
+//     MOTION_PLANNER_LOG_INFO_STREAM("downsample:" << downSample);
 
 //     //publishPointCloudType = sdfPtr->Get<uint16_t>("publish_pointcloud_type");
 //     publishPointCloudType = 2;
@@ -805,7 +808,7 @@ void LivoxPointsPlugin::SendRosTf(const ignition::math::Pose3d &pose, const std:
 //             auto axis = ray * math::Vector3d(1.0, 0.0, 0.0);
 
 //             // if (range < 0.3) {
-//             //     ROS_WARN_STREAM("Small pt: range: " << range << ", axis: " << axis);
+//             //     MOTION_PLANNER_LOG_WARN_STREAM("Small pt: range: " << range << ", axis: " << axis);
 //             // }
 //             auto point = range * axis;
 //             pcl::PointXYZ pt;

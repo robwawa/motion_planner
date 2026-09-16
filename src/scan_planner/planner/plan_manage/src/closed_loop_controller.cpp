@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <motion_planner_log/logging.h>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -55,7 +56,7 @@ bool loadRequiredParam(const ros::NodeHandle &nh, const std::string &name, doubl
   if (nh.getParam(name, value))
     return true;
 
-  ROS_ERROR_STREAM("[closed_loop_controller] missing required private parameter ~" << name);
+  MOTION_PLANNER_LOG_ERROR_STREAM("missing required private parameter ~" << name);
   return false;
 }
 
@@ -74,7 +75,7 @@ bool loadParams(const ros::NodeHandle &nh)
   nh.param("finish_yaw_tolerance", finish_yaw_tolerance, 0.15);
   if (ok && max_vyaw > kMaxVYawLimit)
   {
-    ROS_WARN("[closed_loop_controller] cap max_vyaw %.3f to %.3f rad/s.", max_vyaw, kMaxVYawLimit);
+    MOTION_PLANNER_LOG_WARN("cap max_vyaw %.3f to %.3f rad/s.", max_vyaw, kMaxVYawLimit);
     max_vyaw = kMaxVYawLimit;
   }
   return ok;
@@ -167,7 +168,7 @@ void bsplineCallback(const scan_planner::BsplineConstPtr &msg)
   last_update_time = ros::Time::now();
   receive_traj = true;
 
-  ROS_WARN("[closed_loop_controller] received bspline traj_id=%d duration=%.3f", traj_id, traj_duration);
+  MOTION_PLANNER_LOG_INFO("Received trajectory: id=%d duration=%.3f s", traj_id, traj_duration);
 }
 
 void odomCallback(const nav_msgs::OdometryConstPtr &msg)
@@ -191,7 +192,10 @@ void cmdCallback(const ros::TimerEvent &)
   const ros::Time now = ros::Time::now();
   double dt = (now - last_update_time).toSec();
   if (dt < 0.0 || dt > 0.2)
+  {
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "Odometry update gap is invalid: dt=%.3f s; holding command.", dt);
     dt = 0.0;
+  }
 
   const double t_eval = std::min(exec_time, traj_duration);
   Eigen::Vector3d pos_des = traj[0].evaluateDeBoorT(t_eval);
@@ -203,6 +207,8 @@ void cmdCallback(const ros::TimerEvent &)
 
   if (std::abs(yaw_err) > heading_error_threshold)
   {
+    MOTION_PLANNER_LOG_WARN_THROTTLE(2.0, "Heading error exceeds safety threshold: error=%.3f threshold=%.3f; freeze execution.",
+                                      yaw_err, heading_error_threshold);
     publishExecutionFrozen(true);
     publishStop(vyaw_cmd);
     last_update_time = now; // freeze exec_time while rotating in place
@@ -238,6 +244,8 @@ void cmdCallback(const ros::TimerEvent &)
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "closed_loop_controller");
+  motion_planner_log::initialize("closed_loop_controller", argv[0]);
+  MOTION_PLANNER_LOG_INFO("Node starting: closed-loop controller.");
   ros::NodeHandle node;
   ros::NodeHandle nh("~");
 
@@ -251,7 +259,7 @@ int main(int argc, char **argv)
   cmd_timer = node.createTimer(ros::Duration(0.01), cmdCallback);
 
   last_update_time = ros::Time::now();
-  ROS_WARN("[closed_loop_controller] ready.");
+  MOTION_PLANNER_LOG_INFO("Ready: bspline_topic=%s odom_topic=%s", "planning/bspline", body_pose_topic.c_str());
 
   ros::spin();
   return 0;
