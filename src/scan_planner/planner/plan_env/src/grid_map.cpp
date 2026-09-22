@@ -177,7 +177,7 @@ void GridMap::initMap(ros::NodeHandle &nh)
   sliding_map_frame_sub_ =
       node_.subscribe<nav_msgs::Odometry>("/grid_map/body_pose", 50, &GridMap::slidingMapFrameCallback, this);
   if (pct_traversability_.enabled)
-    pct_terrain_map_sub_ = node_.subscribe<pct_planner::PctTerrainMap>(
+    pct_terrain_map_sub_ = node_.subscribe<global_pct_planner::PctTerrainMap>(
         pct_traversability_.topic, 1, &GridMap::pctTerrainMapCallback, this);
 
   occ_timer_ = node_.createTimer(ros::Duration(0.05), &GridMap::updateOccupancyCallback, this);
@@ -294,7 +294,8 @@ Eigen::Vector3d GridMap::footprintSamplePosition(const Eigen::Vector3d& pos, dou
   return result;
 }
 
-void GridMap::pctTerrainMapCallback(const pct_planner::PctTerrainMapConstPtr& msg)
+void GridMap::pctTerrainMapCallback(
+    const global_pct_planner::PctTerrainMapConstPtr& msg)
 {
   std::shared_ptr<PctTerrainMap> map(new PctTerrainMap);
   std::string error;

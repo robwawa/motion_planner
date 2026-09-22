@@ -1,0 +1,19 @@
+<launch>
+  <arg name="package_path" default="$(find global_pct_planner)" />
+  <!-- Resolve the source package from either source-space or install-space. -->
+  <arg name="source_package_path"
+       default="$(eval arg('package_path') if arg('package_path').endswith('/src/global_pct_planner') else arg('package_path') + '/../../../src/global_pct_planner')" />
+  <arg name="tomogram_name" default="building2_9" />
+  <arg name="body_height" default="0.4" />
+  <arg name="tomogram_dir"
+       default="$(arg source_package_path)/rsc/tomogram" />
+
+  <rosparam command="load"
+            file="$(find global_pct_planner)/config/global_pct_planner.yaml" />
+  <node pkg="global_pct_planner" type="global_pct_planner_node"
+        name="global_pct_planner" output="screen">
+    <param name="tomogram_name" value="$(arg tomogram_name)" />
+    <param name="tomogram_dir" value="$(arg tomogram_dir)" />
+    <param name="body_height" value="$(arg body_height)" />
+  </node>
+</launch>

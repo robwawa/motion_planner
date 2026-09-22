@@ -1,385 +1,217 @@
 # PCT 点云地图清洗工具
 
-`pct_map_cleaner.py` 是一个独立的 Python 3 工具，用于清洗 LIO-SAM
-生成的最终 `.pcd` 地图，使其更适合 PCT tomography 使用。
+本目录提供一个 Python 启动器和一个独立的 C++ 点云清洗后端。Python 不执行
+点云算法，只负责选择配置文件、查找 `pct_map_cleaner` 可执行文件并转发参数。
 
-SOR、ROR 和浮空点团阶段只删除原始点。最后的空间降采样阶段会为每个非空
-voxel 输出一个代表点，并将该点的 XYZ 放置在 voxel 几何中心，以获得规则的
-物理空间分布。工具不进行曲面重建、填补空洞、地面判断，也不修改 PCT
-Planner 原代码。
+后端使用 PCL 读取和写出 PCD，公共类只暴露 STL 和 `Point3f`/`PointCloudXYZ`，
+不会把 PCL、FLANN 或 OpenMP 类型泄漏到公共头文件中。最终文件只包含 `x y z`
+三个字段。
 
-工具位于 `src/pct_map_cleaner/`，不是 ROS 或 Catkin 软件包，也不需要 ROS
-依赖。
+## 构建
 
-## 依赖安装
+依赖包括 PCL、FLANN、OpenMP 和 yaml-cpp。构建产物固定为 `build/pct_map_cleaner`：
 
 ```bash
-pip install open3d numpy pyyaml
+cd src/pct_map_cleaner
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
 ```
 
-## 运行方式
+## 运行
 
-进入工具目录后运行：
+配置文件默认是脚本同目录下的 `pct_map_cleaner.yaml`，因此可以直接运行：
 
 ```bash
-cd /home/wa/inspection/3D_motion_planner/motion_planner/src/pct_map_cleaner
-
-python3 pct_map_cleaner.py \
-    --config pct_map_cleaner.yaml
+cd src/pct_map_cleaner
+python3 pct_map_cleaner.py
 ```
 
-也可以通过命令行覆盖 YAML 中的输入和输出路径：
+也可以显式指定配置，并覆盖输入输出路径：
 
 ```bash
 python3 pct_map_cleaner.py \
-    --config pct_map_cleaner.yaml \
-    --input /path/to/GlobalMap.pcd \
-    --output /path/to/GlobalMap_pct_clean.pcd
+  --config /path/to/site.yaml \
+  --input /path/to/input.pcd \
+  --output /path/to/output.pcd
 ```
 
-命令行中的 `--input` 和 `--output` 优先级高于 YAML 配置。
+配置文件中的相对 `input_pcd` 和 `output_pcd` 路径相对于 YAML 所在目录解释。
+命令行优先级为：默认 YAML → `--config` → `--input`/`--output`。
 
-查看所有命令行参数：
+Python 查找后端的顺序为：
+
+1. `PCT_MAP_CLEANER_BIN` 环境变量；
+2. `src/pct_map_cleaner/build/pct_map_cleaner`；
+3. `PATH` 中的 `pct_map_cleaner`。
+
+后端不存在时，脚本直接报错，不会回退到旧的 Python 点云实现。
+
+C++ 后端也可以直接运行：
 
 ```bash
-python3 pct_map_cleaner.py --help
-```
-
-示例 YAML 中的输入和输出路径是占位路径。首次使用时请修改配置，或者直接
-通过 `--input` 和 `--output` 提供路径。
-
-## 与 PCT 分辨率的关系
-
-当前项目的 PCT 配置位于：
-
-```text
-src/pct_planner/config/pct_planner.yaml
-```
-
-其中当前地图参数为：
-
-```yaml
-pct:
-  map:
-    resolution: 0.10
-    slice_dh: 0.5
-```
-
-PCT tomography 在 XY 平面使用 `0.10 m` 分辨率将点映射到地图栅格。因此本
-工具默认使用：
-
-```yaml
-uniform_sampling:
-  spacing: 0.05
-```
-
-也就是：
-
-```text
-uniform_sampling.spacing = 0.5 * PCT map.resolution
-```
-
-这样可以在进入 PCT 前降低点云冗余，同时使采样间距小于 PCT 的 XY 栅格分辨率。
-这里的“均匀”指空间密度由固定 voxel 尺寸控制，不代表所有输出点之间严格等距。
-
-`spacing` 当前是手动固定值，不会在运行时自动读取 PCT YAML。如果以后修改了
-PCT 的 `map.resolution`，请同步调整清洗配置中的 `spacing`，建议继续保持
-`spacing < resolution`，并优先使用约 `0.5 * resolution` 的保守值。
-
-PCT 的 `slice_dh=0.5 m` 只用于 tomography 的垂直分层。本工具不使用它删除、
-合并或判断 Z 方向点，也不会据此删除楼梯、坡道、顶棚、楼板、悬空平台或其他
-多层结构。
-
-推荐工作流：
-
-```text
-GlobalMap.pcd
-    ↓
-pct_map_cleaner.py
-    ↓
-GlobalMap_pct_clean.pcd
-    ↓
-PCT tomography
-    ↓
-tomogram
-    ↓
-PCT Planner
+./build/pct_map_cleaner --help
+./build/pct_map_cleaner --config pct_map_cleaner.yaml
+./build/pct_map_cleaner --config pct_map_cleaner.yaml \
+  --input /path/to/input.pcd --output /path/to/output.pcd
 ```
 
 ## 处理流程
 
-处理顺序如下：
+固定顺序为：
 
-1. 使用 `open3d.io.read_point_cloud()` 读取 PCD。
-2. 删除 XYZ 中包含 NaN、Inf 或 `-Inf` 的点。
-3. 根据配置执行 Statistical Outlier Removal（SOR）。
-4. 根据配置执行 Radius Outlier Removal（ROR）。
-5. 使用 DBSCAN 分析点团，只删除满足条件的小型浮空点团。
-6. 使用 NumPy 执行 3D voxel 空间均匀采样。
-7. 保存 `GlobalMap_pct_clean.pcd`。
+```text
+读取 PCD
+  → 删除 NaN/Inf
+  → 原始坐标预降采样
+  → SOR
+  → ROR
+  → 小型浮空点团过滤
+  → 最终 voxel-center 采样
+  → 地面局部空洞补全
+  → 写出 XYZ PCD
+```
 
-点云包围盒只用于统计和日志输出，不用于裁剪地图范围。DBSCAN 的
-`label == -1` 点只会被统计，不会被自动删除，因为它们可能是栏杆、细边缘、
-楼梯棱边或其他合法的稀疏结构。
+预降采样只减少点数。每个预 voxel 选择距离 voxel 中心最近的原始点，输出坐标
+完全来自输入点；代表误差超过 `max_rep_error` 时拒绝继续处理。最终
+`uniform_sampling` 才会把每个非空 voxel 表示为 voxel 中心，这是唯一修改 XYZ
+坐标的阶段。
 
-## 参数说明
+SOR 使用 FLANN KD-tree 并行查询，ROR 和浮空点团过滤使用稀疏网格。地面补全只
+对最终采样结果工作，根据 XY 邻域、支持方向、支持 cell 数和局部高度层判断小型
+缺口，超过 `max_hole_area` 的缺口跳过，不跨楼层或不同高度结构补点。
 
-### SOR
+## 配置要点
 
-- `nb_neighbors`：统计邻域点数量。
-- `std_ratio`：统计异常阈值。
-- `std_ratio` 越小，删除越激进，越可能误删真实稀疏结构。
-- SOR 删除比例超过 20% 时，程序会打印 warning。
-
-默认值：
+新流程相关配置为：
 
 ```yaml
-sor:
+pre_sampling:
   enable: true
-  nb_neighbors: 30
-  std_ratio: 2.5
-```
+  spacing: 0.025
+  max_rep_error: 0.05
+  representative: nearest_to_voxel_center
 
-### ROR
-
-- `radius`：邻域搜索半径。半径太小，稀疏真实结构越容易被误删。
-- `nb_points`：半径内所需的邻居点数量。该值越大，过滤越激进。
-- ROR 删除比例超过 20% 时，程序会打印 warning。
-
-默认值：
-
-```yaml
-ror:
-  enable: true
-  nb_points: 2
-  radius: 0.15
-```
-
-#### 增强孤立点去除
-
-如果运行后仍有明显的孤立飞点，建议优先逐步增大 `nb_points`：
-
-```yaml
-ror:
-  enable: true
-  nb_points: 3
-  radius: 0.15
-```
-
-建议按以下顺序测试：
-
-```text
-nb_points: 2 → 3 → 4
-```
-
-`nb_points` 越大，一个点需要更多邻居才能保留，ROR 会更加激进。不要为了
-删除孤立点而盲目增大 `radius`；半径过大可能让原本稀疏的点找到较远邻居而被
-保留，具体值应结合原始点云密度调整。半径过小则更容易误删栏杆、细杆、楼梯
-边缘和远处稀疏结构。
-
-如果仍有统计异常点，可以再适度降低 SOR 的 `std_ratio`：
-
-```yaml
-sor:
-  nb_neighbors: 30
-  std_ratio: 2.0
-```
-
-推荐从 `2.5` 调整到 `2.0`，不要一开始就使用过小值。`std_ratio` 越小，越容易
-误删楼梯边缘、栏杆、细杆、稀疏墙面和顶棚边缘。
-
-如果问题不是单个孤立点，而是小型密集浮空点团，可以调整：
-
-```yaml
-floating_cluster:
-  remove_if_point_count_below: 50
-```
-
-当前默认值为 `30`。只有确认仍存在小型浮空点团时，才建议谨慎增大
-`max_bbox_x`、`max_bbox_y` 和 `max_bbox_z`，因为阈值过大可能误删真实小物体或
-合法的小型结构。
-
-推荐调参顺序为：
-
-1. 将 `ror.nb_points` 从 `2` 调整为 `3`。
-2. 检查删除比例和 CloudCompare 中的 `removed_ror.pcd`。
-3. 仍有孤立点时，再尝试 `nb_points: 4`。
-4. 最后将 `sor.std_ratio` 从 `2.5` 调整为 `2.0`。
-5. 对小型密集浮空点团，再考虑提高 `remove_if_point_count_below`。
-
-不要一次大幅修改多个参数。SOR 或 ROR 删除比例超过 20% 时，必须重点检查
-楼梯、栏杆、悬空平台、顶棚边缘和上下多层结构是否被误删。
-
-### 小型浮空点团
-
-该阶段使用 `cluster_dbscan()`。对于每一个 `label >= 0` 的 cluster，计算点数
-和 XYZ 三个方向的包围盒尺寸。
-
-只有同时满足以下条件时才会删除：
-
-```text
-point_count < remove_if_point_count_below
-dx < max_bbox_x
-dy < max_bbox_y
-dz < max_bbox_z
-```
-
-程序不会只保留最大 cluster，也不会删除所有与主体不连接的 cluster。因此，
-顶棚、楼板、栏杆、悬空平台、桥梁、overhang 以及上下多层结构不会因为属于
-独立连通组件而被自动删除。
-
-注意：
-
-- `eps` 过小，可能将一个真实结构拆成多个 cluster。
-- 浮空 cluster 的 bbox 阈值过大，可能误删真实小物体或小型结构。
-- 该阶段不判断一个结构是否是地面、顶棚、楼梯、坡道或可通行区域。
-
-### 空间均匀采样
-
-工具没有使用 `uniform_down_sample()`，因为它只是按照点数组顺序抽点，
-并不保证空间均匀。
-
-当前采样模式为 `voxel_center`，不是 voxel centroid。具体实现为：
-
-1. 以当前点云最小坐标作为整体网格原点。
-2. 使用 NumPy 向量化计算每个点的 voxel 索引。
-3. 使用排序和分组处理每个 voxel。
-4. 计算 voxel 中心。
-5. 每个非空 voxel 输出一个位于几何中心的代表点。
-6. 使用 voxel 内距离中心最近的原始点同步 colors 和 normals。
-
-因此，输出点的物理位置会被规则化到 voxel 中心，但不会计算 voxel centroid、
-平均值、中位数、插值或曲面重建。这个阶段允许代表点的 XYZ 偏离原始点位置。
-
-单个原始点到其 voxel 中心的最大理论位移为：
-
-```text
-sqrt(3) / 2 * spacing
-```
-
-当 `spacing=0.05 m` 时，最大理论位移约为 `0.0433 m`。程序会在日志中输出：
-
-```text
-occupied voxels:
-max displacement:
-mean displacement:
-```
-
-由于薄墙、栏杆、楼梯棱边和悬空结构可能被移动到 voxel 中心，使用清洗后的
-地图生成 PCT tomogram 后，应在 CloudCompare 和 PCT 输出中检查几何偏移。
-
-`spacing` 是 voxel 边长。值越大，地图越稀疏，也可能影响 PCT tomography
-的连续性。
-
-如果：
-
-```text
-PCT map.resolution = 0.10 m
-```
-
-建议第一轮测试保持：
-
-```yaml
 uniform_sampling:
-  sampling_mode: voxel_center
+  enable: true
   spacing: 0.05
+  sampling_mode: voxel_center
+
+ground_completion:
+  enable: true
+  spacing: 0.05
+  support_radius: 0.30
+  z_tolerance: 0.15
+  min_support_directions: 4
+  min_support_cells: 4
+  max_hole_area: 0.25
+
+performance:
+  threads: 0
 ```
 
-即 `spacing < PCT resolution`。
+现有的 `sor`、`ror` 和 `floating_cluster` 配置名称继续兼容。`threads: 0` 使用
+OpenMP 默认线程数；设置为正数可固定线程数，便于复现实验。
 
-本工具的默认配置已经按照上述关系设置为 `spacing: 0.05`。降采样只负责控制
-输入点云的空间密度，PCT tomography 仍负责 XY 栅格映射、垂直切片以及后续的
-多层结构处理。
-
-## 保护 PCT 多层结构
-
-PCT Planner 负责处理多层结构，因此本工具不尝试判断：
-
-- 什么是地面；
-- 什么是顶棚；
-- 哪里是楼梯或坡道；
-- 哪些结构可通行；
-- 哪个 cluster 是地图主体。
-
-清洗流程只处理统计异常点、真正孤立的飞点、小型密集浮空点团以及空间冗余
-点，不做地图理解。
-
-## 与 PCT tomography 的验证
-
-生成清洗地图后，可使用该 PCD 作为 PCT tomography 的输入：
+## 验证
 
 ```bash
-cd /home/wa/inspection/3D_motion_planner/motion_planner/src/pct_planner/tomography/scripts
-
-python3 tomography.py --backend cpu \
-    --pcd-file /path/to/GlobalMap_pct_clean.pcd \
-    --tomogram-name GlobalMap_pct_clean
+python3 src/pct_map_cleaner/pct_map_cleaner.py --help
+python3 src/pct_map_cleaner/pct_map_cleaner.py
+(cd src/pct_map_cleaner/build && ctest --output-on-failure)
 ```
 
-验证时应检查：
+应重点检查报告中的各阶段点数和耗时，并确认输出 PCD 的字段只有 `x y z`。
+建议分别用 `threads: 1` 和固定的多线程数运行，比较输出点坐标和点顺序；算法
+中的网格、voxel 和排序均使用确定性规则。
 
-- 清洗后的 PCD 能被 PCT 正常加载；
-- tomography 能正常生成 tomogram；
-- 输出仍包含预期的多个高度层；
-- 楼梯、坡道、栏杆、悬空平台、overhang 和上下多层结构没有因清洗脚本的
-  最大连通组件假设而被删除；
-- 点数减少后，PCT 的 XY 栅格和层析结果仍保持连续性。
+## 等价加速与可选 SOR 后端
 
-上述命令只验证 PCT 对清洗地图的兼容性，不会修改 PCT Planner 或 tomography
-的源代码。
+默认 `sor.search_backend: legacy` 保留原四棵随机 KD-tree、`checks=64` 的
+近似邻域语义。预采样复用同一张哈希表完成代表误差验证；ROR 找够邻居即结束
+查询；补全复用线程工作区并按支持偏移编号去重；SOR 使用 4096 点分块查询。
+滤波参数、阶段顺序、代表点选择和全局统计累加顺序保持不变。
 
-## Debug 中间文件
-
-配置：
+可选配置：
 
 ```yaml
-debug:
-  save_intermediate: true
-  output_directory: "./pct_map_cleaner_debug"
+sor:
+  search_backend: single_exact
 ```
 
-开启后会保存：
+`single_exact` 使用 FLANN 单棵 KD-tree（leaf size 10、reorder=true、eps=0）。
+它不是原近似查询的逐点等价替代。本次真实地图上 SOR 保留集合有明显变化，
+因此只作为可选模式提供，不自动切换。改回 `legacy` 即可恢复默认搜索语义。
+旧 YAML 缺少该字段时自动使用 `legacy`，未知字段值会报错。
 
-```text
-00_input_valid.pcd
-01_sor.pcd
-removed_sor.pcd
-02_ror.pcd
-removed_ror.pcd
-03_cluster_clean.pcd
-removed_floating_clusters.pcd
-04_uniform.pcd
+报告新增 `detail.*` 子计时，以及实际 SOR 后端和请求线程数。
+`total` 仍只累计七个顶层阶段，不包含 PCD 读写，也不会重复累计子计时。
+子计时主要用于定位计算段；局部容器析构等开销仍计入顶层阶段，故子计时之和
+不必精确等于该阶段耗时。`threads: 0` 继续遵循 OpenMP 默认线程设置。
+
+### 构建与回归测试
+
+以下命令从本目录执行；进入构建目录运行 CTest，兼容不支持 `--test-dir` 的
+旧版 CTest：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build -j8
+(cd build && ctest --output-on-failure)
 ```
 
-其中：
+测试包含冻结旧实现的逐点对照、预采样/ROR/补全边界、多高度层、SOR 单点与
+分块均值比较、精确 KNN 与暴力计算比较、1/4/8/16 线程一致性，以及配置和
+离线工具回归。`BUILD_TESTING=ON` 额外要求 Python 3 解释器，仅使用标准库。
+冻结旧版二进制为 `build/pct_map_cleaner_baseline`，不安装为生产入口。
 
-- `removed_sor.pcd` 保存 SOR 删除的点；
-- `removed_ror.pcd` 保存 ROR 删除的点；
-- `removed_floating_clusters.pcd` 保存被小型浮空 cluster 阶段删除的点。
+### 真实地图质量与性能对比
 
-这些文件可以使用 CloudCompare 或 Open3D 检查。
+工具仅依赖 Python 3 标准库和系统 `/usr/bin/time`。所有输出写入指定的新目录；
+目录已存在则拒绝执行，以防覆盖证据或地图。以下命令从本目录执行：
 
-如果某个处理模块关闭，程序会跳过该处理，并在对应中间文件中保存未改变的
-点云结果。SOR、ROR 删除点文件仍会生成；浮空 cluster 删除文件受
-`save_removed_clusters` 控制。
+```bash
+python3 tools/benchmark.py \
+  --baseline build/pct_map_cleaner_baseline \
+  --optimized build/pct_map_cleaner \
+  --config pct_map_cleaner.yaml \
+  --input ../global_pct_planner/rsc/pcd/building2_9.pcd \
+  --output-dir /tmp/pct-quality-new --mode quality --threads 1 4 8 16
 
-## 点属性同步
+python3 tools/benchmark.py \
+  --baseline build/pct_map_cleaner_baseline \
+  --optimized build/pct_map_cleaner \
+  --config pct_map_cleaner.yaml \
+  --input ../global_pct_planner/rsc/pcd/building2_9.pcd \
+  --output-dir /tmp/pct-timing-new --mode timing --threads 1 4 8 16 --repeats 5
+```
 
-对于 Open3D 支持的 `colors` 和 `normals`，程序会使用与 XYZ 相同的点索引进行
-同步保留。
+质量模式用独立进程执行各阶段前缀，比较 packed XYZ 数据哈希（包含点顺序），
+并检查各线程数结果一致。`legacy` 的任何差异会使脚本失败；`single_exact` 与
+基线的差异会报告但不会被当作等价失败，其跨线程输出仍要求一致。
+质量模式继承配置已有开关，不会把原本关闭的浮空点团过滤打开。
 
-当前版本主要保证 XYZ 几何正确性。对于 Open3D 不支持或无法可靠同步的其他
-PCD 字段，不进行重建或猜测。
+性能模式每个版本/线程数组合预热一次，随后每轮各执行一次、共五轮；相邻轮
+反转版本顺序，平衡运行顺序影响。每版均有五个样本，不为每个候选重复计算一套
+基线。记录阶段时间、总时间、含读写的进程墙钟时间、峰值 RSS 和最终 XYZ 哈希。
+`summary.json` 提供中位数、最小/最大值；`equality.json` 检查默认模式一致性。
+可重复传 `--variant NAME=/absolute/path/to/binary` 加入增量版本的对比。
+配置编辑支持本项目所用的普通顶层 section/两空格子键格式，不支持 YAML 锚点、
+内联映射等其他 YAML 表达方式。
 
-## 性能与日志
+几何差异工具使用单树精确最近邻，距离单位为米；它同时导出两边独有的点：
 
-程序使用 `time.perf_counter()` 统计并打印 SOR、ROR、DBSCAN、空间采样和总耗时。
+```bash
+build/pct_map_cleaner_compare \
+  /tmp/pct-quality-new/baseline-t8-ground_completion.pcd \
+  /tmp/pct-quality-new/single_exact-t8-ground_completion.pcd \
+  /tmp/pct-geometry-new/final 8
+```
 
-百万级点云处理时：
+输出 `final.json`、`final-old-only.pcd`、`final-new-only.pcd`。报告包含双向最近邻
+P50/P95/P99/最大值，以及大于 0.025/0.05/0.10 m 的点比例；分位数采用线性插值。
+独有点按 XYZ 精确数值比较，以多重集差保留重复点计数。空目标的距离指标为
+`null`，并报告 `unmatched_points`。已有输出文件会触发错误，避免覆盖。
 
-- SOR 和 ROR 的邻域搜索可能占用较多时间；
-- DBSCAN 通常是最主要的性能瓶颈；
-- 空间采样主要使用 NumPy 向量化，不对每个点执行 Python KD-tree 查询；
-- 空间采样会创建 voxel 索引、排序和距离临时数组，需要足够内存。
-
-空间采样是主动降采样，因此即使减少比例超过 20%，也不会打印异常 warning。
+最终点数相近、距离分位数较小均不足以单独证明质量相当。正式切换精确后端前，
+仍需检查差异点云中的楼梯、栏杆、薄墙和多层地面，并验证下游 PCT 可通行地图。
+本次测量和验收结果见 `reports/performance.md`。

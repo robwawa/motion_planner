@@ -1,0 +1,42 @@
+--- a/src/pct_map_cleaner.cpp
++++ b/src/pct_map_cleaner.cpp
+@@ -478,20 +478,27 @@
+        item < static_cast<std::int64_t>(input.points.size()); ++item) {
+     const std::size_t point_index = static_cast<std::size_t>(item);
+     const auto cell = point_cell(input.points[point_index], config_.ror_radius);
+-    std::size_t neighbors = 0;
+-    for_each_neighbor_cell(cell, [&](const Cell3& neighbor_cell) {
+-      const auto iterator = grid.find(neighbor_cell);
+-      if (iterator == grid.end()) return;
+-      for (const std::size_t candidate : iterator->second) {
+-        if (candidate == point_index) continue;
+-        if (squared_distance(input.points[point_index], input.points[candidate]) <=
+-            radius_squared) {
+-          ++neighbors;
++    const auto has_support = [&]() {
++      std::size_t neighbors = 0;
++      for (int dx = -1; dx <= 1; ++dx) {
++        for (int dy = -1; dy <= 1; ++dy) {
++          for (int dz = -1; dz <= 1; ++dz) {
++            const auto iterator = grid.find(Cell3{cell.x + dx, cell.y + dy, cell.z + dz});
++            if (iterator == grid.end()) continue;
++            for (const std::size_t candidate : iterator->second) {
++              if (candidate == point_index) continue;
++              if (squared_distance(input.points[point_index], input.points[candidate]) <=
++                  radius_squared && ++neighbors >=
++                      static_cast<std::size_t>(config_.ror_min_neighbors)) {
++                return true;
++              }
++            }
++          }
+         }
+       }
+-    });
+-    keep[point_index] = neighbors >=
+-        static_cast<std::size_t>(config_.ror_min_neighbors) ? 1U : 0U;
++      return false;
++    };
++    keep[point_index] = has_support() ? 1U : 0U;
+   }
+ 
+   timer.mark("ror.query");

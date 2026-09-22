@@ -1,0 +1,28 @@
+{
+  "input": "/home/wa/inspection/3D_motion_planner/motion_planner/src/global_pct_planner/rsc/pcd/building2_9.pcd",
+  "input_sha256": "8721efeb74415336d47c97d861d6e30ad213669b120d5b37c62461100c1f2eae",
+  "config_sha256": "defc506f700a2defdb2e899fb5b478c0f65f042b75d70c68deefa974b996d911",
+  "binaries": {
+    "baseline": {
+      "path": "/tmp/pct-cleaner-baseline/build/pct_map_cleaner",
+      "sha256": "7365ceb7d033fe6f2a484c6e310069051542fa5bdf65eabe1196690bdf8a8e23"
+    },
+    "legacy": {
+      "path": "/home/wa/inspection/3D_motion_planner/motion_planner/src/pct_map_cleaner/build/pct_map_cleaner",
+      "sha256": "6cefb0a7943efdb58b86ba11814715b808eb1b8f471fa3e249c86883bac6513c"
+    },
+    "single_exact": {
+      "path": "/home/wa/inspection/3D_motion_planner/motion_planner/src/pct_map_cleaner/build/pct_map_cleaner",
+      "sha256": "6cefb0a7943efdb58b86ba11814715b808eb1b8f471fa3e249c86883bac6513c"
+    }
+  },
+  "omp_environment": {},
+  "threads": [
+    1,
+    4,
+    8,
+    16
+  ],
+  "repeats": 5,
+  "mode": "quality"
+}

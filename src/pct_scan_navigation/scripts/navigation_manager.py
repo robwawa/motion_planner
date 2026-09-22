@@ -12,7 +12,7 @@ import tf2_geometry_msgs  # registers PoseStamped conversions
 import tf2_ros
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry, Path
-from pct_planner.msg import PlanPath3DAction, PlanPath3DGoal
+from global_pct_planner.msg import PlanPath3DAction, PlanPath3DGoal
 from std_msgs.msg import Empty, String
 from motion_planner_log import configure
 

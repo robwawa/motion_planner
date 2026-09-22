@@ -1,0 +1,52 @@
+pct:
+  map:
+    resolution: 0.10
+    ground_h: 0.0
+    slice_dh: 0.5
+  traversability:
+    kernel_size: 7
+    interval_min: 0.50
+    interval_free: 0.50
+    slope_max: 0.40
+    step_max: 0.30
+    standable_ratio: 0.50
+    cost_barrier: 50.0
+    safe_margin: 0.5
+    inflation: 0.1
+    cost_threshold: 49.0
+
+pointcloud_tomography:
+  map_frame: map
+  pointcloud_topic: /global_points
+  layer_G_topic: /layer_G_
+  layer_C_topic: /layer_C_
+  tomogram_topic: /tomogram
+  terrain_map_topic: /pct/terrain_map
+
+global_pct_planner:
+  navigation_frame: map
+  body_height: 0.4
+  layer_height_tolerance: 0.75
+  optimize_path: true
+  endpoint_snap_radius: 1.5
+  wait_timeout: 300.0
+  max_heading_rate: 10.0
+  use_quintic: true
+  dynamic_replan:
+    enabled: true
+    cloud_topic: /dynamic_perception/dynamic_cloud
+    health_topic: /dynamic_perception/scan_healthy
+    dynamic_source_timeout: 0.5
+    update_rate: 10.0
+    debug_publish_rate: 1.0
+    max_points_per_snapshot: 200000
+    max_debug_points: 100000
+    terrain_ignore_height: 0.08
+    layer_height_tolerance: 0.25
+    robot_radius: 0.32
+    safety_margin: 0.15
+    inflation_radius: 0.50
+    collision_top_margin: 0.20
+    lethal_cost: 100
+    max_dynamic_memory_mb: 128.0
+    max_snapshot_retries: 1

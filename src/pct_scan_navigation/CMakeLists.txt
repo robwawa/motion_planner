@@ -9,7 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   interactive_markers
   nav_msgs
-  pct_planner
+  global_pct_planner
   motion_planner_log
   rospy
   std_msgs
@@ -18,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   visualization_msgs
 )
 
-catkin_package(CATKIN_DEPENDS motion_planner_log)
+catkin_package(CATKIN_DEPENDS motion_planner_log global_pct_planner)
 
 if(CATKIN_ENABLE_TESTING)
   ######################

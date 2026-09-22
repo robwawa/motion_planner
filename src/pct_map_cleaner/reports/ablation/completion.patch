@@ -1,0 +1,82 @@
+--- a/src/pct_map_cleaner.cpp
++++ b/src/pct_map_cleaner.cpp
+@@ -226,7 +226,7 @@
+ struct SupportPoint {
+   double z = 0.0;
+   std::size_t source_index = 0;
+-  Cell2 source_cell;
++  std::size_t offset_index = 0;
+   int dx = 0;
+   int dy = 0;
+ };
+@@ -692,15 +692,18 @@
+   std::vector<std::vector<CompletionCandidate>> local_candidates(
+       static_cast<std::size_t>(workers));
+   const auto evaluate_candidate = [&](const Cell2& candidate,
+-                                      std::vector<CompletionCandidate>& output) {
+-    std::vector<SupportPoint> support;
+-    for (const auto& offset : support_offsets) {
++                                      std::vector<CompletionCandidate>& output,
++                                      std::vector<SupportPoint>& support,
++                                      std::vector<unsigned char>& support_seen) {
++    support.clear();
++    for (std::size_t offset_index = 0; offset_index < support_offsets.size(); ++offset_index) {
++      const auto& offset = support_offsets[offset_index];
+       const Cell2 source_cell{candidate.x + offset.x, candidate.y + offset.y};
+       const auto iterator = grid.find(source_cell);
+       if (iterator == grid.end()) continue;
+       for (const auto& point : iterator->second) {
+         support.push_back(SupportPoint{
+-            point.first, point.second, source_cell,
++            point.first, point.second, offset_index,
+             static_cast<int>(offset.x), static_cast<int>(offset.y)});
+       }
+     }
+@@ -719,13 +722,18 @@
+         ++end;
+       }
+ 
+-      std::unordered_set<Cell2, Cell2Hash> support_cells;
++      std::fill(support_seen.begin(), support_seen.end(), 0U);
++      std::size_t support_cell_count = 0;
+       bool left = false;
+       bool right = false;
+       bool front = false;
+       bool back = false;
+       for (std::size_t index = begin; index < end; ++index) {
+-        support_cells.insert(support[index].source_cell);
++        auto& seen = support_seen[support[index].offset_index];
++        if (seen == 0U) {
++          seen = 1U;
++          ++support_cell_count;
++        }
+         left = left || support[index].dx < 0;
+         right = right || support[index].dx > 0;
+         front = front || support[index].dy > 0;
+@@ -733,7 +741,7 @@
+       }
+       const int direction_count = static_cast<int>(left) + static_cast<int>(right) +
+           static_cast<int>(front) + static_cast<int>(back);
+-      if (support_cells.size() >= static_cast<std::size_t>(
++      if (support_cell_count >= static_cast<std::size_t>(
+               config_.ground_min_support_cells) &&
+           direction_count >= config_.ground_min_support_directions) {
+         const std::size_t middle_right = begin + (end - begin) / 2U;
+@@ -778,6 +786,8 @@
+ 
+ #pragma omp parallel num_threads(workers)
+   {
++    std::vector<SupportPoint> support;
++    std::vector<unsigned char> support_seen(support_offsets.size(), 0U);
+     const int thread =
+ #ifdef _OPENMP
+         omp_get_thread_num();
+@@ -788,7 +798,7 @@
+     for (std::int64_t item = 0;
+          item < static_cast<std::int64_t>(candidates.size()); ++item) {
+       evaluate_candidate(candidates[static_cast<std::size_t>(item)],
+-                         local_candidates[static_cast<std::size_t>(thread)]);
++                         local_candidates[static_cast<std::size_t>(thread)], support, support_seen);
+     }
+   }
+ 

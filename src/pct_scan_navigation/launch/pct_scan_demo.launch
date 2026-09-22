@@ -1,12 +1,17 @@
 <launch>
+  <arg name="global_pct_package_path" default="$(find global_pct_planner)" />
+  <arg name="global_pct_source_path"
+       default="$(eval arg('global_pct_package_path') if arg('global_pct_package_path').endswith('/src/global_pct_planner') else arg('global_pct_package_path') + '/../../../src/global_pct_planner')" />
   <!-- Keep SCAN's collision map aligned with the PCT input PCD.  The argument
        can be overridden for custom map files, e.g. pcd_map_file:=/tmp/map.pcd. -->
   <arg name="pcd_map_file"
-       default="$(find pct_planner)/rsc/pcd/GlobalMap_pct_clean01.pcd" doc="可用 plaza3_10,building2_9,building3.0" />
+       default="$(arg global_pct_source_path)/rsc/pcd/GlobalMap_pct_clean01.pcd" doc="可用 plaza3_10,building2_9,building3.0" />
   <!-- Must identify the tomogram built from pcd_map_file.  Supply a unique
        name when overriding pcd_map_file, e.g. best2_jetson_run2. -->
   <arg name="tomogram_name"
        default="GlobalMap_pct_clean01" />
+  <arg name="tomogram_dir"
+       default="$(arg global_pct_source_path)/rsc/tomogram" />
   <arg name="controller_mode" default="open_loop" doc="open_loop for 3D path playback; closed_loop for same-floor Twist control" />
   <arg name="use_gpu" default="false" />
   <arg name="body_height" default="0.36"
@@ -28,17 +33,19 @@
 
   <!-- Publish the PCT tomogram and visualization layers in the same map frame
        used by the global planner, SCAN and the merged RViz configuration. -->
-  <include file="$(find pct_planner)/launch/tomography.launch">
+  <include file="$(find global_pct_planner)/launch/tomography.launch">
     <arg name="backend" value="cpu" />
     <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
     <arg name="tomogram_name" value="$(arg tomogram_name)" />
+    <arg name="export_dir" value="$(arg tomogram_dir)" />
   </include>
 
   <!-- PCT starts after tomography has loaded the shared configuration, so its
        scenario-specific height override remains effective. -->
-  <include file="$(find pct_planner)/launch/planner.launch">
+  <include file="$(find global_pct_planner)/launch/planner.launch">
     <arg name="tomogram_name" value="$(arg tomogram_name)" />
     <arg name="body_height" value="$(arg body_height)" />
+    <arg name="tomogram_dir" value="$(arg tomogram_dir)" />
   </include>
 
   <include file="$(find scan_planner)/launch/run.launch">

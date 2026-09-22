@@ -35,7 +35,8 @@ const char* PctTerrainMap::queryStatusName(QueryStatus status) {
   return "unknown";
 }
 
-bool PctTerrainMap::setFromMessage(const pct_planner::PctTerrainMap& msg,
+bool PctTerrainMap::setFromMessage(
+    const global_pct_planner::PctTerrainMap& msg,
                                    std::string& error) {
   valid_ = false;
   if (msg.resolution <= 0.0 || msg.rows == 0 || msg.cols == 0 || msg.layers == 0) {

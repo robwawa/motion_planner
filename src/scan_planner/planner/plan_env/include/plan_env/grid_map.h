@@ -266,7 +266,8 @@ private:
   void sensorPoseCallback(const nav_msgs::OdometryConstPtr& pose);
   void slidingMapFrameCallback(const nav_msgs::OdometryConstPtr& pose);
   void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& img);
-  void pctTerrainMapCallback(const pct_planner::PctTerrainMapConstPtr& msg);
+  void pctTerrainMapCallback(
+      const global_pct_planner::PctTerrainMapConstPtr& msg);
 
   // update occupancy by raycasting
   void updateOccupancyCallback(const ros::TimerEvent& /*event*/);

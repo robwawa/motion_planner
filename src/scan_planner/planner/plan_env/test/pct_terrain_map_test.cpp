@@ -4,11 +4,11 @@
 
 namespace
 {
-  pct_planner::PctTerrainMap makeMap(const uint32_t rows, const uint32_t cols,
+  global_pct_planner::PctTerrainMap makeMap(const uint32_t rows, const uint32_t cols,
                                      const std::vector<float> &traversability,
                                      const std::vector<float> &ground_elevation)
   {
-    pct_planner::PctTerrainMap msg;
+    global_pct_planner::PctTerrainMap msg;
     msg.header.frame_id = "map";
     msg.resolution = 0.1;
     msg.center_x = 0.0;
@@ -22,7 +22,7 @@ namespace
     return msg;
   }
 
-  PctTerrainMap loadMap(const pct_planner::PctTerrainMap &msg)
+  PctTerrainMap loadMap(const global_pct_planner::PctTerrainMap &msg)
   {
     PctTerrainMap map;
     std::string error;
@@ -75,4 +75,10 @@ TEST(PctTerrainMap, PreservesLayerAndTraversabilityFiltering)
 
   EXPECT_EQ(PctTerrainMap::QueryStatus::kHeightMismatch,
             map.queryTraversableLayer(0.0, 0.0, 2.0, 0.4, 20.0, cell));
+}
+
+int main(int argc, char** argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

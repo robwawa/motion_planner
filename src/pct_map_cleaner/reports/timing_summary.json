@@ -1,0 +1,2790 @@
+[
+  {
+    "variant": "baseline",
+    "threads": 1,
+    "times": {
+      "finite_filter": {
+        "median": 0.011087,
+        "min": 0.0108002,
+        "max": 0.0122181
+      },
+      "floating_cluster": {
+        "median": 2.5e-07,
+        "min": 1.84e-07,
+        "max": 3.3e-07
+      },
+      "ground_completion": {
+        "median": 10.7969,
+        "min": 10.2658,
+        "max": 11.0395
+      },
+      "pre_sampling": {
+        "median": 1.88646,
+        "min": 1.56286,
+        "max": 1.92708
+      },
+      "ror": {
+        "median": 1.25609,
+        "min": 1.15214,
+        "max": 1.33402
+      },
+      "sor": {
+        "median": 33.8125,
+        "min": 31.471,
+        "max": 34.5716
+      },
+      "uniform_sampling": {
+        "median": 0.28157,
+        "min": 0.228137,
+        "max": 0.303739
+      },
+      "total": {
+        "median": 48.0433,
+        "min": 44.6908,
+        "max": 49.187
+      }
+    },
+    "peak_rss_kib": 533820,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "pre",
+    "threads": 1,
+    "times": {
+      "finite_filter": {
+        "median": 0.011403,
+        "min": 0.00998784,
+        "max": 0.0121693
+      },
+      "floating_cluster": {
+        "median": 1.93e-07,
+        "min": 1.5e-07,
+        "max": 2.42e-07
+      },
+      "ground_completion": {
+        "median": 10.8069,
+        "min": 10.2806,
+        "max": 10.8369
+      },
+      "pre_sampling": {
+        "median": 1.20688,
+        "min": 1.01697,
+        "max": 1.31829
+      },
+      "ror": {
+        "median": 1.27281,
+        "min": 1.17708,
+        "max": 1.3
+      },
+      "sor": {
+        "median": 33.7838,
+        "min": 31.5849,
+        "max": 34.9183
+      },
+      "uniform_sampling": {
+        "median": 0.284506,
+        "min": 0.231179,
+        "max": 0.293556
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.125464,
+        "min": 0.116367,
+        "max": 0.127047
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0889776,
+        "min": 0.075423,
+        "max": 0.0899926
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 10.5166,
+        "min": 10.015,
+        "max": 10.5461
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0469137,
+        "min": 0.0438796,
+        "max": 0.0494402
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.499318,
+        "min": 0.402612,
+        "max": 0.534294
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.282196,
+        "min": 0.252902,
+        "max": 0.293026
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.256246,
+        "min": 0.218181,
+        "max": 0.31448
+      },
+      "detail.ror.grid": {
+        "median": 0.114954,
+        "min": 0.101251,
+        "max": 0.126072
+      },
+      "detail.ror.output": {
+        "median": 0.00294224,
+        "min": 0.00268081,
+        "max": 0.00347281
+      },
+      "detail.ror.query": {
+        "median": 1.10449,
+        "min": 1.03289,
+        "max": 1.1247
+      },
+      "detail.sor.build": {
+        "median": 1.83392,
+        "min": 1.67051,
+        "max": 1.91428
+      },
+      "detail.sor.filter": {
+        "median": 0.0126667,
+        "min": 0.0109033,
+        "max": 0.0141637
+      },
+      "detail.sor.prepare": {
+        "median": 0.00333447,
+        "min": 0.00250185,
+        "max": 0.00434381
+      },
+      "detail.sor.query": {
+        "median": 31.8565,
+        "min": 29.8333,
+        "max": 32.9167
+      },
+      "total": {
+        "median": 47.3923,
+        "min": 44.3007,
+        "max": 48.6414
+      }
+    },
+    "peak_rss_kib": 533504,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 1,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "ror",
+    "threads": 1,
+    "times": {
+      "finite_filter": {
+        "median": 0.0114499,
+        "min": 0.00995642,
+        "max": 0.011784
+      },
+      "floating_cluster": {
+        "median": 1.82e-07,
+        "min": 1.42e-07,
+        "max": 3.25e-07
+      },
+      "ground_completion": {
+        "median": 10.9036,
+        "min": 10.5355,
+        "max": 11.0481
+      },
+      "pre_sampling": {
+        "median": 1.21036,
+        "min": 1.01081,
+        "max": 1.24962
+      },
+      "ror": {
+        "median": 0.697438,
+        "min": 0.636898,
+        "max": 0.704749
+      },
+      "sor": {
+        "median": 33.8899,
+        "min": 31.8811,
+        "max": 34.0649
+      },
+      "uniform_sampling": {
+        "median": 0.288077,
+        "min": 0.226552,
+        "max": 0.291613
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.122425,
+        "min": 0.111286,
+        "max": 0.129066
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0886962,
+        "min": 0.0757094,
+        "max": 0.0916837
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 10.6154,
+        "min": 10.2712,
+        "max": 10.77
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0462156,
+        "min": 0.0409417,
+        "max": 0.0479513
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.50389,
+        "min": 0.401453,
+        "max": 0.528193
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.286618,
+        "min": 0.257928,
+        "max": 0.287483
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.25894,
+        "min": 0.215279,
+        "max": 0.264195
+      },
+      "detail.ror.grid": {
+        "median": 0.11241,
+        "min": 0.0997944,
+        "max": 0.119133
+      },
+      "detail.ror.output": {
+        "median": 0.00324263,
+        "min": 0.00268663,
+        "max": 0.00376829
+      },
+      "detail.ror.query": {
+        "median": 0.531156,
+        "min": 0.492429,
+        "max": 0.533645
+      },
+      "detail.sor.build": {
+        "median": 1.82939,
+        "min": 1.67478,
+        "max": 1.85128
+      },
+      "detail.sor.filter": {
+        "median": 0.0121461,
+        "min": 0.0110852,
+        "max": 0.0134232
+      },
+      "detail.sor.prepare": {
+        "median": 0.00387713,
+        "min": 0.00248491,
+        "max": 0.00410003
+      },
+      "detail.sor.query": {
+        "median": 31.9846,
+        "min": 30.1342,
+        "max": 32.1523
+      },
+      "total": {
+        "median": 47.0247,
+        "min": 44.3225,
+        "max": 47.3262
+      }
+    },
+    "peak_rss_kib": 533776,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 1,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "completion",
+    "threads": 1,
+    "times": {
+      "finite_filter": {
+        "median": 0.0110107,
+        "min": 0.0100484,
+        "max": 0.0127828
+      },
+      "floating_cluster": {
+        "median": 1.95e-07,
+        "min": 1.11e-07,
+        "max": 2.7e-07
+      },
+      "ground_completion": {
+        "median": 6.06296,
+        "min": 6.0287,
+        "max": 6.10729
+      },
+      "pre_sampling": {
+        "median": 1.22956,
+        "min": 1.12482,
+        "max": 1.28118
+      },
+      "ror": {
+        "median": 0.700372,
+        "min": 0.683645,
+        "max": 0.713774
+      },
+      "sor": {
+        "median": 33.9646,
+        "min": 33.1381,
+        "max": 34.6326
+      },
+      "uniform_sampling": {
+        "median": 0.284298,
+        "min": 0.280964,
+        "max": 0.299564
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0995689,
+        "min": 0.0983673,
+        "max": 0.104836
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0899605,
+        "min": 0.084749,
+        "max": 0.0947878
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 5.78992,
+        "min": 5.76629,
+        "max": 5.85073
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0464018,
+        "min": 0.0457087,
+        "max": 0.0474307
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.516739,
+        "min": 0.451458,
+        "max": 0.543543
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.283714,
+        "min": 0.268483,
+        "max": 0.289706
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.262903,
+        "min": 0.240047,
+        "max": 0.30739
+      },
+      "detail.ror.grid": {
+        "median": 0.11306,
+        "min": 0.111842,
+        "max": 0.120904
+      },
+      "detail.ror.output": {
+        "median": 0.0028864,
+        "min": 0.00275246,
+        "max": 0.00375167
+      },
+      "detail.ror.query": {
+        "median": 0.532864,
+        "min": 0.519981,
+        "max": 0.542722
+      },
+      "detail.sor.build": {
+        "median": 1.83216,
+        "min": 1.81719,
+        "max": 1.99567
+      },
+      "detail.sor.filter": {
+        "median": 0.0125038,
+        "min": 0.0121586,
+        "max": 0.012751
+      },
+      "detail.sor.prepare": {
+        "median": 0.00385449,
+        "min": 0.00282419,
+        "max": 0.00454823
+      },
+      "detail.sor.query": {
+        "median": 32.0568,
+        "min": 31.0611,
+        "max": 32.6825
+      },
+      "total": {
+        "median": 42.2312,
+        "min": 41.3823,
+        "max": 43.0153
+      }
+    },
+    "peak_rss_kib": 533712,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 1,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "legacy",
+    "threads": 1,
+    "times": {
+      "finite_filter": {
+        "median": 0.011636,
+        "min": 0.0108504,
+        "max": 0.0119699
+      },
+      "floating_cluster": {
+        "median": 2.78e-07,
+        "min": 2.18e-07,
+        "max": 4e-07
+      },
+      "ground_completion": {
+        "median": 6.07838,
+        "min": 6.05861,
+        "max": 6.364
+      },
+      "pre_sampling": {
+        "median": 1.2221,
+        "min": 1.16763,
+        "max": 1.26247
+      },
+      "ror": {
+        "median": 0.718523,
+        "min": 0.688278,
+        "max": 0.768564
+      },
+      "sor": {
+        "median": 32.8425,
+        "min": 32.6943,
+        "max": 33.9807
+      },
+      "uniform_sampling": {
+        "median": 0.29643,
+        "min": 0.281431,
+        "max": 0.320431
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.101601,
+        "min": 0.10104,
+        "max": 0.109293
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0904553,
+        "min": 0.0875666,
+        "max": 0.091691
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 5.81274,
+        "min": 5.78817,
+        "max": 6.09454
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.047536,
+        "min": 0.0456679,
+        "max": 0.05052
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.512486,
+        "min": 0.484428,
+        "max": 0.531141
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.288684,
+        "min": 0.279539,
+        "max": 0.293281
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.257132,
+        "min": 0.237974,
+        "max": 0.267378
+      },
+      "detail.ror.grid": {
+        "median": 0.115585,
+        "min": 0.110314,
+        "max": 0.118874
+      },
+      "detail.ror.output": {
+        "median": 0.00321606,
+        "min": 0.00289578,
+        "max": 0.00402267
+      },
+      "detail.ror.query": {
+        "median": 0.548443,
+        "min": 0.525802,
+        "max": 0.577433
+      },
+      "detail.sor.build": {
+        "median": 1.8258,
+        "min": 1.8182,
+        "max": 1.88186
+      },
+      "detail.sor.filter": {
+        "median": 0.0128404,
+        "min": 0.0120841,
+        "max": 0.0132501
+      },
+      "detail.sor.prepare": {
+        "median": 0.00402515,
+        "min": 0.00257941,
+        "max": 0.00501403
+      },
+      "detail.sor.query": {
+        "median": 30.9329,
+        "min": 30.754,
+        "max": 32.0824
+      },
+      "total": {
+        "median": 41.1681,
+        "min": 40.9645,
+        "max": 42.5459
+      }
+    },
+    "peak_rss_kib": 533760,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 1,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "single_exact",
+    "threads": 1,
+    "times": {
+      "finite_filter": {
+        "median": 0.0110386,
+        "min": 0.0109613,
+        "max": 0.0130246
+      },
+      "floating_cluster": {
+        "median": 3.04e-07,
+        "min": 1.93e-07,
+        "max": 3.48e-07
+      },
+      "ground_completion": {
+        "median": 5.69008,
+        "min": 5.55167,
+        "max": 5.73538
+      },
+      "pre_sampling": {
+        "median": 1.23368,
+        "min": 1.2293,
+        "max": 1.26934
+      },
+      "ror": {
+        "median": 0.617345,
+        "min": 0.614645,
+        "max": 0.648438
+      },
+      "sor": {
+        "median": 3.04441,
+        "min": 3.00874,
+        "max": 3.14088
+      },
+      "uniform_sampling": {
+        "median": 0.257045,
+        "min": 0.255424,
+        "max": 0.271462
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0985887,
+        "min": 0.0983171,
+        "max": 0.109759
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.103485,
+        "min": 0.0891985,
+        "max": 0.107202
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 5.41652,
+        "min": 5.2798,
+        "max": 5.45753
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0450027,
+        "min": 0.0438827,
+        "max": 0.0501989
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.528383,
+        "min": 0.527501,
+        "max": 0.536241
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.279064,
+        "min": 0.274981,
+        "max": 0.29325
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.26057,
+        "min": 0.255255,
+        "max": 0.265639
+      },
+      "detail.ror.grid": {
+        "median": 0.10423,
+        "min": 0.103448,
+        "max": 0.106187
+      },
+      "detail.ror.output": {
+        "median": 0.00291955,
+        "min": 0.00286158,
+        "max": 0.00324933
+      },
+      "detail.ror.query": {
+        "median": 0.475246,
+        "min": 0.473089,
+        "max": 0.505592
+      },
+      "detail.sor.build": {
+        "median": 0.249386,
+        "min": 0.243257,
+        "max": 0.253337
+      },
+      "detail.sor.filter": {
+        "median": 0.00855479,
+        "min": 0.00793048,
+        "max": 0.00914836
+      },
+      "detail.sor.prepare": {
+        "median": 0.00323013,
+        "min": 0.00260817,
+        "max": 0.00435239
+      },
+      "detail.sor.query": {
+        "median": 2.78415,
+        "min": 2.74759,
+        "max": 2.87334
+      },
+      "total": {
+        "median": 10.8616,
+        "min": 10.815,
+        "max": 10.906
+      }
+    },
+    "peak_rss_kib": 319760,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1427184,
+      "after ROR": 1422234,
+      "after cluster filter": 1422234,
+      "final points": 949574,
+      "completion added": 82393,
+      "requested threads": 1,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "baseline",
+    "threads": 4,
+    "times": {
+      "finite_filter": {
+        "median": 0.0103435,
+        "min": 0.00999007,
+        "max": 0.0113992
+      },
+      "floating_cluster": {
+        "median": 1.94e-07,
+        "min": 1.8e-07,
+        "max": 2.14e-07
+      },
+      "ground_completion": {
+        "median": 3.27901,
+        "min": 3.23382,
+        "max": 3.46329
+      },
+      "pre_sampling": {
+        "median": 1.60356,
+        "min": 1.54946,
+        "max": 1.69973
+      },
+      "ror": {
+        "median": 0.469813,
+        "min": 0.427597,
+        "max": 0.527471
+      },
+      "sor": {
+        "median": 10.6406,
+        "min": 10.2256,
+        "max": 11.1625
+      },
+      "uniform_sampling": {
+        "median": 0.251834,
+        "min": 0.233267,
+        "max": 0.301583
+      },
+      "total": {
+        "median": 16.1905,
+        "min": 15.6797,
+        "max": 17.0254
+      }
+    },
+    "peak_rss_kib": 533824,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "pre",
+    "threads": 4,
+    "times": {
+      "finite_filter": {
+        "median": 0.0100311,
+        "min": 0.00987473,
+        "max": 0.0104299
+      },
+      "floating_cluster": {
+        "median": 1.81e-07,
+        "min": 1.55e-07,
+        "max": 2.46e-07
+      },
+      "ground_completion": {
+        "median": 3.22036,
+        "min": 3.19721,
+        "max": 3.37596
+      },
+      "pre_sampling": {
+        "median": 1.02214,
+        "min": 1.01233,
+        "max": 1.10361
+      },
+      "ror": {
+        "median": 0.434854,
+        "min": 0.427483,
+        "max": 0.452781
+      },
+      "sor": {
+        "median": 10.328,
+        "min": 10.1709,
+        "max": 10.4836
+      },
+      "uniform_sampling": {
+        "median": 0.238721,
+        "min": 0.231503,
+        "max": 0.244922
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.109242,
+        "min": 0.107923,
+        "max": 0.117527
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0826998,
+        "min": 0.0821786,
+        "max": 0.0910099
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 2.9639,
+        "min": 2.94161,
+        "max": 3.10337
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0419927,
+        "min": 0.041705,
+        "max": 0.0434605
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.408921,
+        "min": 0.399624,
+        "max": 0.449469
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.256394,
+        "min": 0.253243,
+        "max": 0.277817
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.216011,
+        "min": 0.21495,
+        "max": 0.233987
+      },
+      "detail.ror.grid": {
+        "median": 0.103386,
+        "min": 0.102227,
+        "max": 0.106211
+      },
+      "detail.ror.output": {
+        "median": 0.00303297,
+        "min": 0.00277896,
+        "max": 0.00340495
+      },
+      "detail.ror.query": {
+        "median": 0.286719,
+        "min": 0.27967,
+        "max": 0.297565
+      },
+      "detail.sor.build": {
+        "median": 1.70547,
+        "min": 1.68398,
+        "max": 1.7669
+      },
+      "detail.sor.filter": {
+        "median": 0.0121721,
+        "min": 0.011955,
+        "max": 0.012777
+      },
+      "detail.sor.prepare": {
+        "median": 0.00259638,
+        "min": 0.00251857,
+        "max": 0.00285518
+      },
+      "detail.sor.query": {
+        "median": 8.55082,
+        "min": 8.40734,
+        "max": 8.64323
+      },
+      "total": {
+        "median": 15.2901,
+        "min": 15.0679,
+        "max": 15.5893
+      }
+    },
+    "peak_rss_kib": 533632,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 4,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "ror",
+    "threads": 4,
+    "times": {
+      "finite_filter": {
+        "median": 0.01041,
+        "min": 0.0099169,
+        "max": 0.0123998
+      },
+      "floating_cluster": {
+        "median": 2.19e-07,
+        "min": 1.59e-07,
+        "max": 4.85e-07
+      },
+      "ground_completion": {
+        "median": 3.23242,
+        "min": 3.22819,
+        "max": 3.24472
+      },
+      "pre_sampling": {
+        "median": 1.01527,
+        "min": 0.998762,
+        "max": 1.22029
+      },
+      "ror": {
+        "median": 0.287884,
+        "min": 0.285979,
+        "max": 0.293949
+      },
+      "sor": {
+        "median": 10.4024,
+        "min": 10.2936,
+        "max": 10.8632
+      },
+      "uniform_sampling": {
+        "median": 0.232229,
+        "min": 0.228654,
+        "max": 0.241202
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.108313,
+        "min": 0.106084,
+        "max": 0.111765
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0832124,
+        "min": 0.0821918,
+        "max": 0.0877804
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 2.97591,
+        "min": 2.97043,
+        "max": 2.98547
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0417738,
+        "min": 0.0415097,
+        "max": 0.0420233
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.407828,
+        "min": 0.399591,
+        "max": 0.509197
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.256318,
+        "min": 0.253056,
+        "max": 0.283511
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.214592,
+        "min": 0.209909,
+        "max": 0.253726
+      },
+      "detail.ror.grid": {
+        "median": 0.103507,
+        "min": 0.101826,
+        "max": 0.106169
+      },
+      "detail.ror.output": {
+        "median": 0.0029747,
+        "min": 0.00280044,
+        "max": 0.00307631
+      },
+      "detail.ror.query": {
+        "median": 0.139994,
+        "min": 0.136926,
+        "max": 0.14629
+      },
+      "detail.sor.build": {
+        "median": 1.71326,
+        "min": 1.69198,
+        "max": 1.85717
+      },
+      "detail.sor.filter": {
+        "median": 0.0123289,
+        "min": 0.0120218,
+        "max": 0.0126971
+      },
+      "detail.sor.prepare": {
+        "median": 0.00264276,
+        "min": 0.00255438,
+        "max": 0.00377985
+      },
+      "detail.sor.query": {
+        "median": 8.61564,
+        "min": 8.5286,
+        "max": 8.93309
+      },
+      "total": {
+        "median": 15.2057,
+        "min": 15.0531,
+        "max": 15.8596
+      }
+    },
+    "peak_rss_kib": 533652,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 4,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "completion",
+    "threads": 4,
+    "times": {
+      "finite_filter": {
+        "median": 0.0100825,
+        "min": 0.00990562,
+        "max": 0.0101659
+      },
+      "floating_cluster": {
+        "median": 1.99e-07,
+        "min": 1.11e-07,
+        "max": 2.53e-07
+      },
+      "ground_completion": {
+        "median": 1.79219,
+        "min": 1.7706,
+        "max": 1.86199
+      },
+      "pre_sampling": {
+        "median": 1.04936,
+        "min": 1.03249,
+        "max": 1.05741
+      },
+      "ror": {
+        "median": 0.29035,
+        "min": 0.286552,
+        "max": 0.313242
+      },
+      "sor": {
+        "median": 10.4,
+        "min": 10.3054,
+        "max": 10.5129
+      },
+      "uniform_sampling": {
+        "median": 0.23875,
+        "min": 0.226608,
+        "max": 0.264024
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0865738,
+        "min": 0.084633,
+        "max": 0.0882947
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0816098,
+        "min": 0.0813674,
+        "max": 0.0892073
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 1.55833,
+        "min": 1.53999,
+        "max": 1.61125
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0420131,
+        "min": 0.0413689,
+        "max": 0.0490889
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.426461,
+        "min": 0.416041,
+        "max": 0.445973
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.257236,
+        "min": 0.252877,
+        "max": 0.259229
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.220602,
+        "min": 0.217544,
+        "max": 0.223311
+      },
+      "detail.ror.grid": {
+        "median": 0.103159,
+        "min": 0.101208,
+        "max": 0.107577
+      },
+      "detail.ror.output": {
+        "median": 0.00302622,
+        "min": 0.00290736,
+        "max": 0.00336294
+      },
+      "detail.ror.query": {
+        "median": 0.142398,
+        "min": 0.140273,
+        "max": 0.151957
+      },
+      "detail.sor.build": {
+        "median": 1.69339,
+        "min": 1.6865,
+        "max": 1.73625
+      },
+      "detail.sor.filter": {
+        "median": 0.0125075,
+        "min": 0.011913,
+        "max": 0.013001
+      },
+      "detail.sor.prepare": {
+        "median": 0.00254928,
+        "min": 0.00248334,
+        "max": 0.00274544
+      },
+      "detail.sor.query": {
+        "median": 8.6266,
+        "min": 8.54704,
+        "max": 8.74778
+      },
+      "total": {
+        "median": 13.7739,
+        "min": 13.6712,
+        "max": 13.9986
+      }
+    },
+    "peak_rss_kib": 533700,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 4,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "legacy",
+    "threads": 4,
+    "times": {
+      "finite_filter": {
+        "median": 0.0101295,
+        "min": 0.0100163,
+        "max": 0.0104234
+      },
+      "floating_cluster": {
+        "median": 1.76e-07,
+        "min": 1.61e-07,
+        "max": 2.51e-07
+      },
+      "ground_completion": {
+        "median": 1.79566,
+        "min": 1.79385,
+        "max": 1.83289
+      },
+      "pre_sampling": {
+        "median": 1.00557,
+        "min": 0.999926,
+        "max": 1.01293
+      },
+      "ror": {
+        "median": 0.288517,
+        "min": 0.281643,
+        "max": 0.29085
+      },
+      "sor": {
+        "median": 9.92483,
+        "min": 9.83448,
+        "max": 10.0311
+      },
+      "uniform_sampling": {
+        "median": 0.234093,
+        "min": 0.2303,
+        "max": 0.23515
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0876942,
+        "min": 0.0869364,
+        "max": 0.088801
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0843337,
+        "min": 0.0808405,
+        "max": 0.0851335
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 1.56048,
+        "min": 1.55561,
+        "max": 1.59332
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0422332,
+        "min": 0.0420898,
+        "max": 0.0428479
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.403696,
+        "min": 0.399278,
+        "max": 0.405171
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.250017,
+        "min": 0.247849,
+        "max": 0.260237
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.215729,
+        "min": 0.210386,
+        "max": 0.219016
+      },
+      "detail.ror.grid": {
+        "median": 0.102493,
+        "min": 0.102167,
+        "max": 0.109758
+      },
+      "detail.ror.output": {
+        "median": 0.00290717,
+        "min": 0.00279484,
+        "max": 0.00292532
+      },
+      "detail.ror.query": {
+        "median": 0.1371,
+        "min": 0.13556,
+        "max": 0.14303
+      },
+      "detail.sor.build": {
+        "median": 1.70801,
+        "min": 1.68949,
+        "max": 1.71162
+      },
+      "detail.sor.filter": {
+        "median": 0.011726,
+        "min": 0.0115864,
+        "max": 0.0124466
+      },
+      "detail.sor.prepare": {
+        "median": 0.00273333,
+        "min": 0.00252544,
+        "max": 0.00288417
+      },
+      "detail.sor.query": {
+        "median": 8.14303,
+        "min": 8.05308,
+        "max": 8.26904
+      },
+      "total": {
+        "median": 13.2941,
+        "min": 13.185,
+        "max": 13.3647
+      }
+    },
+    "peak_rss_kib": 533744,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 4,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "single_exact",
+    "threads": 4,
+    "times": {
+      "finite_filter": {
+        "median": 0.0100427,
+        "min": 0.0100036,
+        "max": 0.0106694
+      },
+      "floating_cluster": {
+        "median": 2.45e-07,
+        "min": 1.94e-07,
+        "max": 2.85e-07
+      },
+      "ground_completion": {
+        "median": 1.71337,
+        "min": 1.69832,
+        "max": 1.74651
+      },
+      "pre_sampling": {
+        "median": 1.03008,
+        "min": 1.02675,
+        "max": 1.13061
+      },
+      "ror": {
+        "median": 0.251217,
+        "min": 0.247939,
+        "max": 0.264411
+      },
+      "sor": {
+        "median": 1.0656,
+        "min": 1.05759,
+        "max": 1.07631
+      },
+      "uniform_sampling": {
+        "median": 0.210692,
+        "min": 0.209622,
+        "max": 0.227115
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0865576,
+        "min": 0.0857615,
+        "max": 0.0901154
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0965844,
+        "min": 0.0962051,
+        "max": 0.0998113
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 1.46743,
+        "min": 1.4445,
+        "max": 1.49439
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0400096,
+        "min": 0.0393928,
+        "max": 0.0408426
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.420354,
+        "min": 0.416579,
+        "max": 0.447583
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.251415,
+        "min": 0.2488,
+        "max": 0.266194
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.218766,
+        "min": 0.216122,
+        "max": 0.272631
+      },
+      "detail.ror.grid": {
+        "median": 0.0963426,
+        "min": 0.0946982,
+        "max": 0.0988875
+      },
+      "detail.ror.output": {
+        "median": 0.00273064,
+        "min": 0.002627,
+        "max": 0.00353622
+      },
+      "detail.ror.query": {
+        "median": 0.124628,
+        "min": 0.121781,
+        "max": 0.131504
+      },
+      "detail.sor.build": {
+        "median": 0.231247,
+        "min": 0.227065,
+        "max": 0.233957
+      },
+      "detail.sor.filter": {
+        "median": 0.00860372,
+        "min": 0.00829879,
+        "max": 0.0088398
+      },
+      "detail.sor.prepare": {
+        "median": 0.00255418,
+        "min": 0.00247295,
+        "max": 0.00283432
+      },
+      "detail.sor.query": {
+        "median": 0.818413,
+        "min": 0.812147,
+        "max": 0.835498
+      },
+      "total": {
+        "median": 4.28163,
+        "min": 4.25488,
+        "max": 4.44935
+      }
+    },
+    "peak_rss_kib": 319804,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1427184,
+      "after ROR": 1422234,
+      "after cluster filter": 1422234,
+      "final points": 949574,
+      "completion added": 82393,
+      "requested threads": 4,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "baseline",
+    "threads": 8,
+    "times": {
+      "finite_filter": {
+        "median": 0.0102996,
+        "min": 0.00973965,
+        "max": 0.0109116
+      },
+      "floating_cluster": {
+        "median": 2.18e-07,
+        "min": 2.03e-07,
+        "max": 3.17e-07
+      },
+      "ground_completion": {
+        "median": 1.99548,
+        "min": 1.92757,
+        "max": 2.09739
+      },
+      "pre_sampling": {
+        "median": 1.54412,
+        "min": 1.51657,
+        "max": 1.80084
+      },
+      "ror": {
+        "median": 0.340059,
+        "min": 0.303861,
+        "max": 0.417397
+      },
+      "sor": {
+        "median": 6.56324,
+        "min": 6.50526,
+        "max": 6.78818
+      },
+      "uniform_sampling": {
+        "median": 0.243656,
+        "min": 0.232604,
+        "max": 0.281811
+      },
+      "total": {
+        "median": 10.6647,
+        "min": 10.5319,
+        "max": 11.3199
+      }
+    },
+    "peak_rss_kib": 533712,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "pre",
+    "threads": 8,
+    "times": {
+      "finite_filter": {
+        "median": 0.0100912,
+        "min": 0.0100027,
+        "max": 0.0114043
+      },
+      "floating_cluster": {
+        "median": 2.33e-07,
+        "min": 1.82e-07,
+        "max": 4.15e-07
+      },
+      "ground_completion": {
+        "median": 1.96538,
+        "min": 1.93604,
+        "max": 2.01928
+      },
+      "pre_sampling": {
+        "median": 1.04364,
+        "min": 0.999076,
+        "max": 1.1971
+      },
+      "ror": {
+        "median": 0.314567,
+        "min": 0.305449,
+        "max": 0.343797
+      },
+      "sor": {
+        "median": 6.60778,
+        "min": 6.557,
+        "max": 6.93321
+      },
+      "uniform_sampling": {
+        "median": 0.241285,
+        "min": 0.235124,
+        "max": 0.28986
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.115351,
+        "min": 0.109253,
+        "max": 0.127147
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0922913,
+        "min": 0.0854111,
+        "max": 0.0955649
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 1.69313,
+        "min": 1.66553,
+        "max": 1.72468
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0433705,
+        "min": 0.0417945,
+        "max": 0.048015
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.422772,
+        "min": 0.391193,
+        "max": 0.502532
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.257976,
+        "min": 0.253707,
+        "max": 0.282721
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.217514,
+        "min": 0.215426,
+        "max": 0.247693
+      },
+      "detail.ror.grid": {
+        "median": 0.107618,
+        "min": 0.102054,
+        "max": 0.119954
+      },
+      "detail.ror.output": {
+        "median": 0.00311743,
+        "min": 0.00301932,
+        "max": 0.00356983
+      },
+      "detail.ror.query": {
+        "median": 0.159466,
+        "min": 0.157882,
+        "max": 0.171255
+      },
+      "detail.sor.build": {
+        "median": 1.75706,
+        "min": 1.7177,
+        "max": 1.83247
+      },
+      "detail.sor.filter": {
+        "median": 0.0135024,
+        "min": 0.013124,
+        "max": 0.0144584
+      },
+      "detail.sor.prepare": {
+        "median": 0.00265351,
+        "min": 0.00248634,
+        "max": 0.00355495
+      },
+      "detail.sor.query": {
+        "median": 4.76275,
+        "min": 4.73605,
+        "max": 5.01652
+      },
+      "total": {
+        "median": 10.1676,
+        "min": 10.1198,
+        "max": 10.7946
+      }
+    },
+    "peak_rss_kib": 533680,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 8,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "ror",
+    "threads": 8,
+    "times": {
+      "finite_filter": {
+        "median": 0.0101443,
+        "min": 0.00996003,
+        "max": 0.0114173
+      },
+      "floating_cluster": {
+        "median": 2.13e-07,
+        "min": 1.54e-07,
+        "max": 2.78e-07
+      },
+      "ground_completion": {
+        "median": 1.9601,
+        "min": 1.94219,
+        "max": 2.03422
+      },
+      "pre_sampling": {
+        "median": 1.03301,
+        "min": 0.996673,
+        "max": 1.19791
+      },
+      "ror": {
+        "median": 0.232444,
+        "min": 0.228841,
+        "max": 0.264488
+      },
+      "sor": {
+        "median": 6.6281,
+        "min": 6.58126,
+        "max": 7.07003
+      },
+      "uniform_sampling": {
+        "median": 0.236957,
+        "min": 0.231795,
+        "max": 0.288249
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.115763,
+        "min": 0.110166,
+        "max": 0.12498
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0853367,
+        "min": 0.0841133,
+        "max": 0.095467
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 1.69734,
+        "min": 1.67922,
+        "max": 1.73796
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0427565,
+        "min": 0.0424051,
+        "max": 0.047384
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.416144,
+        "min": 0.400397,
+        "max": 0.496522
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.256635,
+        "min": 0.251202,
+        "max": 0.288676
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.216602,
+        "min": 0.208879,
+        "max": 0.24887
+      },
+      "detail.ror.grid": {
+        "median": 0.108407,
+        "min": 0.102743,
+        "max": 0.119799
+      },
+      "detail.ror.output": {
+        "median": 0.00317816,
+        "min": 0.00302429,
+        "max": 0.00356629
+      },
+      "detail.ror.query": {
+        "median": 0.0803649,
+        "min": 0.0748421,
+        "max": 0.102571
+      },
+      "detail.sor.build": {
+        "median": 1.73327,
+        "min": 1.71417,
+        "max": 1.88313
+      },
+      "detail.sor.filter": {
+        "median": 0.0133305,
+        "min": 0.0131048,
+        "max": 0.0138756
+      },
+      "detail.sor.prepare": {
+        "median": 0.00261671,
+        "min": 0.00254213,
+        "max": 0.00333147
+      },
+      "detail.sor.query": {
+        "median": 4.8382,
+        "min": 4.77218,
+        "max": 5.1002
+      },
+      "total": {
+        "median": 10.1014,
+        "min": 10.0434,
+        "max": 10.8661
+      }
+    },
+    "peak_rss_kib": 533764,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 8,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "completion",
+    "threads": 8,
+    "times": {
+      "finite_filter": {
+        "median": 0.0100959,
+        "min": 0.00987594,
+        "max": 0.0123314
+      },
+      "floating_cluster": {
+        "median": 1.71e-07,
+        "min": 1.25e-07,
+        "max": 2.47e-07
+      },
+      "ground_completion": {
+        "median": 1.12985,
+        "min": 1.11627,
+        "max": 1.16573
+      },
+      "pre_sampling": {
+        "median": 1.07345,
+        "min": 1.04375,
+        "max": 1.34865
+      },
+      "ror": {
+        "median": 0.228929,
+        "min": 0.223937,
+        "max": 0.2495
+      },
+      "sor": {
+        "median": 6.57442,
+        "min": 6.52434,
+        "max": 7.03006
+      },
+      "uniform_sampling": {
+        "median": 0.236686,
+        "min": 0.230963,
+        "max": 0.280074
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0915452,
+        "min": 0.0855992,
+        "max": 0.0960526
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0879672,
+        "min": 0.0823862,
+        "max": 0.0930897
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 0.885249,
+        "min": 0.875493,
+        "max": 0.925481
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0422322,
+        "min": 0.0412234,
+        "max": 0.0487771
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.43254,
+        "min": 0.429765,
+        "max": 0.580952
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.258869,
+        "min": 0.254989,
+        "max": 0.300284
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.21973,
+        "min": 0.216947,
+        "max": 0.291917
+      },
+      "detail.ror.grid": {
+        "median": 0.104446,
+        "min": 0.103297,
+        "max": 0.112056
+      },
+      "detail.ror.output": {
+        "median": 0.0031067,
+        "min": 0.00306986,
+        "max": 0.00382976
+      },
+      "detail.ror.query": {
+        "median": 0.0780646,
+        "min": 0.0764921,
+        "max": 0.0825889
+      },
+      "detail.sor.build": {
+        "median": 1.71467,
+        "min": 1.69988,
+        "max": 1.88091
+      },
+      "detail.sor.filter": {
+        "median": 0.0132708,
+        "min": 0.0129412,
+        "max": 0.0135624
+      },
+      "detail.sor.prepare": {
+        "median": 0.00261499,
+        "min": 0.00250521,
+        "max": 0.00429797
+      },
+      "detail.sor.query": {
+        "median": 4.79777,
+        "min": 4.73525,
+        "max": 5.06502
+      },
+      "total": {
+        "median": 9.24471,
+        "min": 9.20893,
+        "max": 10.0829
+      }
+    },
+    "peak_rss_kib": 533776,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 8,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "legacy",
+    "threads": 8,
+    "times": {
+      "finite_filter": {
+        "median": 0.0102792,
+        "min": 0.0101234,
+        "max": 0.0122108
+      },
+      "floating_cluster": {
+        "median": 1.79e-07,
+        "min": 1.2e-07,
+        "max": 2.71e-07
+      },
+      "ground_completion": {
+        "median": 1.1604,
+        "min": 1.12375,
+        "max": 1.23368
+      },
+      "pre_sampling": {
+        "median": 1.04096,
+        "min": 1.02525,
+        "max": 1.06156
+      },
+      "ror": {
+        "median": 0.256146,
+        "min": 0.239483,
+        "max": 0.281007
+      },
+      "sor": {
+        "median": 6.73405,
+        "min": 6.49,
+        "max": 7.30789
+      },
+      "uniform_sampling": {
+        "median": 0.242201,
+        "min": 0.229051,
+        "max": 0.320274
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.100889,
+        "min": 0.0859134,
+        "max": 0.116092
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0853904,
+        "min": 0.0821225,
+        "max": 0.108634
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 0.898609,
+        "min": 0.885872,
+        "max": 0.933881
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0475115,
+        "min": 0.0414047,
+        "max": 0.0502423
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.418182,
+        "min": 0.408533,
+        "max": 0.446041
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.256969,
+        "min": 0.251991,
+        "max": 0.257201
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.217686,
+        "min": 0.216401,
+        "max": 0.21928
+      },
+      "detail.ror.grid": {
+        "median": 0.111341,
+        "min": 0.105731,
+        "max": 0.122154
+      },
+      "detail.ror.output": {
+        "median": 0.00320272,
+        "min": 0.00311705,
+        "max": 0.00358677
+      },
+      "detail.ror.query": {
+        "median": 0.0989384,
+        "min": 0.0759844,
+        "max": 0.104702
+      },
+      "detail.sor.build": {
+        "median": 1.78351,
+        "min": 1.74353,
+        "max": 1.86533
+      },
+      "detail.sor.filter": {
+        "median": 0.0130234,
+        "min": 0.0127743,
+        "max": 0.0145589
+      },
+      "detail.sor.prepare": {
+        "median": 0.00265748,
+        "min": 0.00252914,
+        "max": 0.00356509
+      },
+      "detail.sor.query": {
+        "median": 4.83532,
+        "min": 4.67267,
+        "max": 5.35289
+      },
+      "total": {
+        "median": 9.56051,
+        "min": 9.15104,
+        "max": 10.2142
+      }
+    },
+    "peak_rss_kib": 533772,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 8,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "single_exact",
+    "threads": 8,
+    "times": {
+      "finite_filter": {
+        "median": 0.0102031,
+        "min": 0.0100152,
+        "max": 0.0112459
+      },
+      "floating_cluster": {
+        "median": 2.69e-07,
+        "min": 2.3e-07,
+        "max": 2.94e-07
+      },
+      "ground_completion": {
+        "median": 1.08727,
+        "min": 1.07719,
+        "max": 1.13927
+      },
+      "pre_sampling": {
+        "median": 1.03216,
+        "min": 1.01711,
+        "max": 1.08652
+      },
+      "ror": {
+        "median": 0.20263,
+        "min": 0.196619,
+        "max": 0.2032
+      },
+      "sor": {
+        "median": 0.771256,
+        "min": 0.760994,
+        "max": 0.799547
+      },
+      "uniform_sampling": {
+        "median": 0.215,
+        "min": 0.213035,
+        "max": 0.226804
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0900944,
+        "min": 0.0854541,
+        "max": 0.0907607
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0997788,
+        "min": 0.0972755,
+        "max": 0.107964
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 0.82793,
+        "min": 0.823854,
+        "max": 0.876792
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0408593,
+        "min": 0.0398199,
+        "max": 0.045432
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.423042,
+        "min": 0.409764,
+        "max": 0.457553
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.250856,
+        "min": 0.249862,
+        "max": 0.252406
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.21707,
+        "min": 0.216267,
+        "max": 0.221578
+      },
+      "detail.ror.grid": {
+        "median": 0.0985222,
+        "min": 0.0965309,
+        "max": 0.100956
+      },
+      "detail.ror.output": {
+        "median": 0.00294769,
+        "min": 0.00291388,
+        "max": 0.00301667
+      },
+      "detail.ror.query": {
+        "median": 0.0694477,
+        "min": 0.0676519,
+        "max": 0.0710488
+      },
+      "detail.sor.build": {
+        "median": 0.231976,
+        "min": 0.229221,
+        "max": 0.235274
+      },
+      "detail.sor.filter": {
+        "median": 0.00926266,
+        "min": 0.0090135,
+        "max": 0.00955013
+      },
+      "detail.sor.prepare": {
+        "median": 0.00253517,
+        "min": 0.00251113,
+        "max": 0.00274599
+      },
+      "detail.sor.query": {
+        "median": 0.52206,
+        "min": 0.517067,
+        "max": 0.55538
+      },
+      "total": {
+        "median": 3.31889,
+        "min": 3.29187,
+        "max": 3.40025
+      }
+    },
+    "peak_rss_kib": 319696,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1427184,
+      "after ROR": 1422234,
+      "after cluster filter": 1422234,
+      "final points": 949574,
+      "completion added": 82393,
+      "requested threads": 8,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "baseline",
+    "threads": 16,
+    "times": {
+      "finite_filter": {
+        "median": 0.0101416,
+        "min": 0.00999976,
+        "max": 0.0104289
+      },
+      "floating_cluster": {
+        "median": 2.04e-07,
+        "min": 1.98e-07,
+        "max": 2.45e-07
+      },
+      "ground_completion": {
+        "median": 1.37746,
+        "min": 1.37535,
+        "max": 1.4338
+      },
+      "pre_sampling": {
+        "median": 1.52147,
+        "min": 1.51148,
+        "max": 1.53259
+      },
+      "ror": {
+        "median": 0.275302,
+        "min": 0.272546,
+        "max": 0.277215
+      },
+      "sor": {
+        "median": 5.21798,
+        "min": 5.13994,
+        "max": 5.24641
+      },
+      "uniform_sampling": {
+        "median": 0.234737,
+        "min": 0.233989,
+        "max": 0.239112
+      },
+      "total": {
+        "median": 8.64376,
+        "min": 8.61126,
+        "max": 8.6756
+      }
+    },
+    "peak_rss_kib": 533688,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "pre",
+    "threads": 16,
+    "times": {
+      "finite_filter": {
+        "median": 0.0101637,
+        "min": 0.00993858,
+        "max": 0.0103621
+      },
+      "floating_cluster": {
+        "median": 2.06e-07,
+        "min": 1.67e-07,
+        "max": 6.01e-07
+      },
+      "ground_completion": {
+        "median": 1.37129,
+        "min": 1.36639,
+        "max": 1.37474
+      },
+      "pre_sampling": {
+        "median": 1.01363,
+        "min": 1.00215,
+        "max": 1.02347
+      },
+      "ror": {
+        "median": 0.285314,
+        "min": 0.282727,
+        "max": 0.288785
+      },
+      "sor": {
+        "median": 5.24212,
+        "min": 5.18457,
+        "max": 5.2644
+      },
+      "uniform_sampling": {
+        "median": 0.238806,
+        "min": 0.234145,
+        "max": 0.242792
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.113206,
+        "min": 0.109997,
+        "max": 0.113714
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0864367,
+        "min": 0.0830212,
+        "max": 0.0868667
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 1.10608,
+        "min": 1.10384,
+        "max": 1.10868
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0423481,
+        "min": 0.0421861,
+        "max": 0.0445486
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.403904,
+        "min": 0.394924,
+        "max": 0.404458
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.257166,
+        "min": 0.253009,
+        "max": 0.258112
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.216903,
+        "min": 0.214146,
+        "max": 0.221161
+      },
+      "detail.ror.grid": {
+        "median": 0.106134,
+        "min": 0.104224,
+        "max": 0.106439
+      },
+      "detail.ror.output": {
+        "median": 0.00332553,
+        "min": 0.00322851,
+        "max": 0.00338662
+      },
+      "detail.ror.query": {
+        "median": 0.134587,
+        "min": 0.132551,
+        "max": 0.137957
+      },
+      "detail.sor.build": {
+        "median": 1.73623,
+        "min": 1.71202,
+        "max": 1.7721
+      },
+      "detail.sor.filter": {
+        "median": 0.013646,
+        "min": 0.0133913,
+        "max": 0.0138268
+      },
+      "detail.sor.prepare": {
+        "median": 0.0028149,
+        "min": 0.00251936,
+        "max": 0.00289724
+      },
+      "detail.sor.query": {
+        "median": 3.41365,
+        "min": 3.37762,
+        "max": 3.43977
+      },
+      "total": {
+        "median": 8.15968,
+        "min": 8.0886,
+        "max": 8.18186
+      }
+    },
+    "peak_rss_kib": 534016,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 16,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "ror",
+    "threads": 16,
+    "times": {
+      "finite_filter": {
+        "median": 0.0100324,
+        "min": 0.0100116,
+        "max": 0.0102203
+      },
+      "floating_cluster": {
+        "median": 1.8e-07,
+        "min": 1.72e-07,
+        "max": 2.26e-07
+      },
+      "ground_completion": {
+        "median": 1.37358,
+        "min": 1.37245,
+        "max": 1.40846
+      },
+      "pre_sampling": {
+        "median": 1.00738,
+        "min": 1.00337,
+        "max": 1.01703
+      },
+      "ror": {
+        "median": 0.20938,
+        "min": 0.206334,
+        "max": 0.215289
+      },
+      "sor": {
+        "median": 5.22863,
+        "min": 5.20627,
+        "max": 5.26999
+      },
+      "uniform_sampling": {
+        "median": 0.235038,
+        "min": 0.232613,
+        "max": 0.236767
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.108972,
+        "min": 0.107218,
+        "max": 0.114341
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0853754,
+        "min": 0.083483,
+        "max": 0.08728
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 1.11562,
+        "min": 1.11339,
+        "max": 1.13758
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0422994,
+        "min": 0.0418351,
+        "max": 0.0454208
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.401771,
+        "min": 0.397353,
+        "max": 0.411819
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.254247,
+        "min": 0.252919,
+        "max": 0.263682
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.213702,
+        "min": 0.210295,
+        "max": 0.214825
+      },
+      "detail.ror.grid": {
+        "median": 0.104493,
+        "min": 0.103534,
+        "max": 0.112199
+      },
+      "detail.ror.output": {
+        "median": 0.00332181,
+        "min": 0.00327589,
+        "max": 0.00347733
+      },
+      "detail.ror.query": {
+        "median": 0.0584624,
+        "min": 0.057939,
+        "max": 0.0604484
+      },
+      "detail.sor.build": {
+        "median": 1.71854,
+        "min": 1.70196,
+        "max": 1.77381
+      },
+      "detail.sor.filter": {
+        "median": 0.0138162,
+        "min": 0.0136013,
+        "max": 0.0138244
+      },
+      "detail.sor.prepare": {
+        "median": 0.00254641,
+        "min": 0.0025288,
+        "max": 0.00278411
+      },
+      "detail.sor.query": {
+        "median": 3.42533,
+        "min": 3.42011,
+        "max": 3.45574
+      },
+      "total": {
+        "median": 8.06282,
+        "min": 8.04184,
+        "max": 8.15031
+      }
+    },
+    "peak_rss_kib": 534032,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 16,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "completion",
+    "threads": 16,
+    "times": {
+      "finite_filter": {
+        "median": 0.0100864,
+        "min": 0.0099477,
+        "max": 0.0104456
+      },
+      "floating_cluster": {
+        "median": 1.63e-07,
+        "min": 1.34e-07,
+        "max": 2.09e-07
+      },
+      "ground_completion": {
+        "median": 0.805827,
+        "min": 0.804447,
+        "max": 0.817123
+      },
+      "pre_sampling": {
+        "median": 1.04697,
+        "min": 1.0303,
+        "max": 1.0767
+      },
+      "ror": {
+        "median": 0.210048,
+        "min": 0.207272,
+        "max": 0.213972
+      },
+      "sor": {
+        "median": 5.21264,
+        "min": 5.19257,
+        "max": 5.25065
+      },
+      "uniform_sampling": {
+        "median": 0.233491,
+        "min": 0.23183,
+        "max": 0.236803
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0865883,
+        "min": 0.0847725,
+        "max": 0.088623
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0846138,
+        "min": 0.0834985,
+        "max": 0.0876598
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 0.568554,
+        "min": 0.568029,
+        "max": 0.575042
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0423385,
+        "min": 0.0417935,
+        "max": 0.0445129
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.431172,
+        "min": 0.419525,
+        "max": 0.454786
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.255823,
+        "min": 0.253216,
+        "max": 0.256761
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.219407,
+        "min": 0.217528,
+        "max": 0.220253
+      },
+      "detail.ror.grid": {
+        "median": 0.106947,
+        "min": 0.101695,
+        "max": 0.108279
+      },
+      "detail.ror.output": {
+        "median": 0.00327414,
+        "min": 0.00322337,
+        "max": 0.00356364
+      },
+      "detail.ror.query": {
+        "median": 0.0599743,
+        "min": 0.0591947,
+        "max": 0.0627746
+      },
+      "detail.sor.build": {
+        "median": 1.71819,
+        "min": 1.69629,
+        "max": 1.72491
+      },
+      "detail.sor.filter": {
+        "median": 0.0138109,
+        "min": 0.0134333,
+        "max": 0.0140294
+      },
+      "detail.sor.prepare": {
+        "median": 0.00255752,
+        "min": 0.00251475,
+        "max": 0.00259323
+      },
+      "detail.sor.query": {
+        "median": 3.41876,
+        "min": 3.41397,
+        "max": 3.45115
+      },
+      "total": {
+        "median": 7.50401,
+        "min": 7.49708,
+        "max": 7.58951
+      }
+    },
+    "peak_rss_kib": 534048,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 16,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "legacy",
+    "threads": 16,
+    "times": {
+      "finite_filter": {
+        "median": 0.0101537,
+        "min": 0.0101203,
+        "max": 0.0109063
+      },
+      "floating_cluster": {
+        "median": 1.89e-07,
+        "min": 1.42e-07,
+        "max": 2.48e-07
+      },
+      "ground_completion": {
+        "median": 0.810127,
+        "min": 0.807054,
+        "max": 0.893394
+      },
+      "pre_sampling": {
+        "median": 1.01178,
+        "min": 1.00141,
+        "max": 1.02024
+      },
+      "ror": {
+        "median": 0.207505,
+        "min": 0.207301,
+        "max": 0.217816
+      },
+      "sor": {
+        "median": 5.20004,
+        "min": 5.15708,
+        "max": 6.01789
+      },
+      "uniform_sampling": {
+        "median": 0.23727,
+        "min": 0.234521,
+        "max": 0.265155
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0870525,
+        "min": 0.0867248,
+        "max": 0.103033
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0855874,
+        "min": 0.0837023,
+        "max": 0.10304
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 0.5694,
+        "min": 0.568897,
+        "max": 0.614089
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0434354,
+        "min": 0.0417898,
+        "max": 0.046283
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.404826,
+        "min": 0.399724,
+        "max": 0.409389
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.251618,
+        "min": 0.249329,
+        "max": 0.258776
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.213732,
+        "min": 0.212929,
+        "max": 0.218007
+      },
+      "detail.ror.grid": {
+        "median": 0.105811,
+        "min": 0.102783,
+        "max": 0.109868
+      },
+      "detail.ror.output": {
+        "median": 0.00329,
+        "min": 0.00326522,
+        "max": 0.00338619
+      },
+      "detail.ror.query": {
+        "median": 0.0598082,
+        "min": 0.0572537,
+        "max": 0.0631938
+      },
+      "detail.sor.build": {
+        "median": 1.73656,
+        "min": 1.71077,
+        "max": 1.79259
+      },
+      "detail.sor.filter": {
+        "median": 0.0142431,
+        "min": 0.0138878,
+        "max": 0.0152864
+      },
+      "detail.sor.prepare": {
+        "median": 0.00262413,
+        "min": 0.0025284,
+        "max": 0.00279921
+      },
+      "detail.sor.query": {
+        "median": 3.37966,
+        "min": 3.36517,
+        "max": 4.14493
+      },
+      "total": {
+        "median": 7.48912,
+        "min": 7.43477,
+        "max": 8.42335
+      }
+    },
+    "peak_rss_kib": 533868,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1495078,
+      "after ROR": 1486463,
+      "after cluster filter": 1486463,
+      "final points": 1037611,
+      "completion added": 108344,
+      "requested threads": 16,
+      "pre-sampled points": 1696235
+    }
+  },
+  {
+    "variant": "single_exact",
+    "threads": 16,
+    "times": {
+      "finite_filter": {
+        "median": 0.0103733,
+        "min": 0.0101429,
+        "max": 0.0104378
+      },
+      "floating_cluster": {
+        "median": 2.49e-07,
+        "min": 1.8e-07,
+        "max": 2.51e-07
+      },
+      "ground_completion": {
+        "median": 0.781749,
+        "min": 0.77702,
+        "max": 0.791668
+      },
+      "pre_sampling": {
+        "median": 1.03409,
+        "min": 1.02303,
+        "max": 1.05712
+      },
+      "ror": {
+        "median": 0.184026,
+        "min": 0.181905,
+        "max": 0.189386
+      },
+      "sor": {
+        "median": 0.657699,
+        "min": 0.655656,
+        "max": 0.689418
+      },
+      "uniform_sampling": {
+        "median": 0.212531,
+        "min": 0.207341,
+        "max": 0.215164
+      },
+      "detail.ground_completion.candidates": {
+        "median": 0.0858111,
+        "min": 0.0856947,
+        "max": 0.0873778
+      },
+      "detail.ground_completion.components_output": {
+        "median": 0.0982467,
+        "min": 0.0960184,
+        "max": 0.100078
+      },
+      "detail.ground_completion.evaluate": {
+        "median": 0.531812,
+        "min": 0.531393,
+        "max": 0.54297
+      },
+      "detail.ground_completion.grid": {
+        "median": 0.0397924,
+        "min": 0.0394337,
+        "max": 0.0417025
+      },
+      "detail.pre_sampling.group": {
+        "median": 0.424258,
+        "min": 0.4147,
+        "max": 0.436032
+      },
+      "detail.pre_sampling.output": {
+        "median": 0.253563,
+        "min": 0.249521,
+        "max": 0.254577
+      },
+      "detail.pre_sampling.validate": {
+        "median": 0.216845,
+        "min": 0.215181,
+        "max": 0.222503
+      },
+      "detail.ror.grid": {
+        "median": 0.0986353,
+        "min": 0.095671,
+        "max": 0.0996539
+      },
+      "detail.ror.output": {
+        "median": 0.00318902,
+        "min": 0.00312024,
+        "max": 0.0033221
+      },
+      "detail.ror.query": {
+        "median": 0.0531405,
+        "min": 0.0524014,
+        "max": 0.0579776
+      },
+      "detail.sor.build": {
+        "median": 0.230594,
+        "min": 0.229032,
+        "max": 0.234406
+      },
+      "detail.sor.filter": {
+        "median": 0.00940717,
+        "min": 0.00936923,
+        "max": 0.01001
+      },
+      "detail.sor.prepare": {
+        "median": 0.00263323,
+        "min": 0.00249415,
+        "max": 0.00297059
+      },
+      "detail.sor.query": {
+        "median": 0.412813,
+        "min": 0.409236,
+        "max": 0.445691
+      },
+      "total": {
+        "median": 2.90581,
+        "min": 2.87701,
+        "max": 2.9119
+      }
+    },
+    "peak_rss_kib": 319760,
+    "counts": {
+      "input points": 2000000,
+      "finite points": 2000000,
+      "after SOR": 1427184,
+      "after ROR": 1422234,
+      "after cluster filter": 1422234,
+      "final points": 949574,
+      "completion added": 82393,
+      "requested threads": 16,
+      "pre-sampled points": 1696235
+    }
+  }
+]

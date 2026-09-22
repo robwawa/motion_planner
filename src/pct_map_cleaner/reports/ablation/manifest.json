@@ -1,0 +1,23 @@
+{
+  "pre": {
+    "src/main.cpp": "13d013cc64f7592beac60ce9183eed81c05f3d8a36b8c46db51087d53631a295",
+    "src/pct_map_cleaner.cpp": "0064bfa72231f7d412c28ea07db6e88ad038c61b709eb2de61dcd6e11ddda154",
+    "include/pct_map_cleaner.hpp": "5bf8da8bd8ceb0947662cef40494927a11a0a9a666f82f9945d46a4069fb8c6d",
+    "CMakeLists.txt": "cc9c841cd1ca79661ae84a1752ef06445e3fa0e7d966eaa99b90a87e860db8ec",
+    "build/pct_map_cleaner": "e9519c8a93106a93e7e6d7873600ec0ef4865aff5a15d74b1288d213cb0efcd1"
+  },
+  "ror": {
+    "src/main.cpp": "13d013cc64f7592beac60ce9183eed81c05f3d8a36b8c46db51087d53631a295",
+    "src/pct_map_cleaner.cpp": "e8dbe7100d31fb2144d04d28d5fd0cb3bf58856cea7bc4a9d5f8ca691d11eb8d",
+    "include/pct_map_cleaner.hpp": "5bf8da8bd8ceb0947662cef40494927a11a0a9a666f82f9945d46a4069fb8c6d",
+    "CMakeLists.txt": "cc9c841cd1ca79661ae84a1752ef06445e3fa0e7d966eaa99b90a87e860db8ec",
+    "build/pct_map_cleaner": "b529fd20cae3bb81cf674f933e085368115bbd24b74fee682962bd97f15a1dbf"
+  },
+  "completion": {
+    "src/main.cpp": "13d013cc64f7592beac60ce9183eed81c05f3d8a36b8c46db51087d53631a295",
+    "src/pct_map_cleaner.cpp": "c1874b0d7d0ca57bb968e9efeea8ddb1185c0254ea22e01a7284f07f91b0eda5",
+    "include/pct_map_cleaner.hpp": "5bf8da8bd8ceb0947662cef40494927a11a0a9a666f82f9945d46a4069fb8c6d",
+    "CMakeLists.txt": "cc9c841cd1ca79661ae84a1752ef06445e3fa0e7d966eaa99b90a87e860db8ec",
+    "build/pct_map_cleaner": "db5b0750c214163b6bd1736e7cd745d53a70473371becede37f38e54714c2bbe"
+  }
+}

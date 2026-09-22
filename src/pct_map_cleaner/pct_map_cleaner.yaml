@@ -1,17 +1,21 @@
 # PCT 点云地图清洗参数文件。
-# 固定处理顺序：删除非法点 → SOR → ROR → 小型浮空点团过滤 → 空间均匀降采样。
-# 本工具只删除原始点，不生成新点、不移动点、不补点。
+# 固定处理顺序：删除非法点 → 原始坐标预降采样 → SOR → ROR
+# → 小型浮空点团过滤 → 最终物理均匀采样 → 地面局部空洞补全。
+# 预降采样只选择原始点，不改变代表点坐标；最终物理均匀采样才将点放到 voxel 中心。
+# C++ 后端最终输出只包含 XYZ 字段。
 
 # 输入 LIO-SAM 最终地图的 PCD 文件路径。
 # 支持绝对路径和相对路径；命令行 --input 的优先级高于此参数。
-input_pcd: "/home/wa/inspection/3D_motion_planner/motion_planner/src/pct_planner/rsc/pcd/cloudGlobal.pcd"
-
+input_pcd: "../global_pct_planner/rsc/pcd/plaza3_10.pcd"
 # 清洗后 PCD 地图的保存路径。
 # 支持绝对路径和相对路径；命令行 --output 的优先级高于此参数。
-output_pcd: "/home/wa/inspection/3D_motion_planner/motion_planner/src/pct_planner/rsc/pcd/GlobalMap_pct_clean03.pcd"
+output_pcd: "../global_pct_planner/rsc/pcd/plaza3_10_clean0.pcd"
 
 
 sor:
+  # legacy 保持原近似搜索语义；single_exact 为可选单树精确搜索，可能改变少量删点。
+  search_backend: single_exact
+
   # SOR 开关：true 执行 Statistical Outlier Removal，false 跳过该阶段。
   enable: true
 
@@ -46,7 +50,7 @@ ror:
 
 floating_cluster:
   # 浮空点团开关：true 执行 DBSCAN 点团分析，false 跳过该阶段。
-  enable: true
+  enable: false
 
   # DBSCAN 邻域半径，单位：米。
   # 两点距离不超过 eps 时，才可能属于同一密度邻域。
@@ -95,21 +99,41 @@ uniform_sampling:
   enable: true
 
   # 3D voxel 边长，单位：米。
-  # 每个 voxel 最多保留一个原始点，并保留距离 voxel 中心最近的原始点。
-  # 不使用 voxel centroid，不计算平均值，不生成新点，不移动原始点。
+  # 每个 voxel 输出一个几何中心点。此阶段允许修改 XYZ，
+  # 与只选择原始代表点的 pre_sampling 不同。
   # 增大：点云更稀疏、文件更小，但可能降低 PCT tomography 连续性。
   # 减小：结构保留更多，但点数、文件大小和计算量增加。
   # 当前 PCT pct.map.resolution = 0.10 m，推荐 spacing = 0.05 m。
   # 如果 PCT resolution 修改，请手动同步修改 spacing。
   spacing: 0.05
+  sampling_mode: "voxel_center"
+
+
+ground_completion:
+  # 最终 voxel-center 采样后，对局部支持充分的小型 XY 表面空洞补点。
+  enable: true
+
+  # 必须与 uniform_sampling.spacing 相同。
+  spacing: 0.05
+
+  support_radius: 0.30
+  z_tolerance: 0.15
+  min_support_directions: 4
+  min_support_cells: 4
+  max_hole_area: 0.50
 
 
 debug:
   # 是否保存处理阶段的中间点云。
   # true：保存各阶段点云以及 SOR、ROR、浮空点团 removed 点云。
   # false：不保存阶段中间文件，但仍保存最终 output_pcd。
-  save_intermediate: true
+  save_intermediate: false
 
   # 中间点云和 removed 点云的输出目录。
   # 相对路径相对于运行脚本时的当前工作目录，不是 YAML 文件所在目录。
   output_directory: "./pct_map_cleaner_debug"
+
+
+performance:
+  # 0 表示使用 OpenMP 默认线程数。
+  threads: 0

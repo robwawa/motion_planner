@@ -1,0 +1,317 @@
+--- a/src/pct_map_cleaner.cpp
++++ b/src/pct_map_cleaner.cpp
+@@ -34,6 +34,19 @@
+ 
+ namespace pct_map_cleaner {
+ namespace {
++
++class DetailTimer {
++public:
++  explicit DetailTimer(std::map<std::string, double>& times) : times_(times) {}
++  void mark(const char* name) {
++    const auto now = std::chrono::steady_clock::now();
++    times_[name] = std::chrono::duration<double>(now - started_).count();
++    started_ = now;
++  }
++private:
++  std::map<std::string, double>& times_;
++  std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
++};
+ 
+ struct Cell2 {
+   std::int64_t x = 0;
+@@ -315,7 +328,9 @@
+   return output;
+ }
+ 
+-PointCloudXYZ PctMapCleaner::pre_downsample(PointCloudXYZ input) const {
++PointCloudXYZ PctMapCleaner::pre_downsample(
++    PointCloudXYZ input, std::map<std::string, double>& detail_times) const {
++  DetailTimer timer(detail_times);
+   if (!config_.pre_sampling_enable || input.points.empty()) return input;
+ 
+   std::unordered_map<Cell3, PreGroup, Cell3Hash> grouped;
+@@ -336,30 +351,26 @@
+     }
+   }
+ 
++  timer.mark("pre_sampling.group");
++  for (const auto& point : input.points) {
++    const auto group_it = grouped.find(point_cell(point, config_.pre_spacing));
++    if (group_it == grouped.end()) {
++      throw std::logic_error("pre-sampling voxel index disappeared");
++    }
++    auto& group = group_it->second;
++    group.max_representation_error = std::max(
++        group.max_representation_error,
++        std::sqrt(squared_distance(point, input.points[group.best_index])));
++  }
++  timer.mark("pre_sampling.validate");
++
+   std::vector<PreGroup> groups;
+   groups.reserve(grouped.size());
+-  for (auto& item : grouped) groups.push_back(item.second);
++  for (const auto& item : grouped) groups.push_back(item.second);
+   std::sort(groups.begin(), groups.end(),
+             [](const PreGroup& left, const PreGroup& right) {
+               return left.cell < right.cell;
+             });
+-
+-  std::unordered_map<Cell3, std::size_t, Cell3Hash> group_indices;
+-  group_indices.reserve(checked_reserve_size(groups.size()));
+-  for (std::size_t index = 0; index < groups.size(); ++index) {
+-    group_indices.emplace(groups[index].cell, index);
+-  }
+-
+-  for (const auto& point : input.points) {
+-    const auto group_it = group_indices.find(point_cell(point, config_.pre_spacing));
+-    if (group_it == group_indices.end()) {
+-      throw std::logic_error("pre-sampling voxel index disappeared");
+-    }
+-    auto& group = groups[group_it->second];
+-    group.max_representation_error = std::max(
+-        group.max_representation_error,
+-        std::sqrt(squared_distance(point, input.points[group.best_index])));
+-  }
+ 
+   PointCloudXYZ output;
+   output.points.reserve(groups.size());
+@@ -370,10 +381,13 @@
+     }
+     output.points.push_back(input.points[group.best_index]);
+   }
++  timer.mark("pre_sampling.output");
+   return output;
+ }
+ 
+-PointCloudXYZ PctMapCleaner::statistical_filter(PointCloudXYZ input) const {
++PointCloudXYZ PctMapCleaner::statistical_filter(
++    PointCloudXYZ input, std::map<std::string, double>& detail_times) const {
++  DetailTimer timer(detail_times);
+   if (!config_.sor_enable || input.points.size() <=
+       static_cast<std::size_t>(config_.sor_neighbors)) {
+     return input;
+@@ -388,9 +402,11 @@
+     data[index * 3U + 2U] = input.points[index].z;
+   }
+ 
++  timer.mark("sor.prepare");
+   flann::Matrix<float> dataset(data.data(), count, 3);
+   flann::Index<flann::L2<float>> index(dataset, flann::KDTreeIndexParams(4));
+   index.buildIndex();
++  timer.mark("sor.build");
+   std::vector<double> mean_distances(count, 0.0);
+   const int workers = worker_count(config_.threads);
+ 
+@@ -421,6 +437,7 @@
+     }
+   }
+ 
++  timer.mark("sor.query");
+   const double mean = std::accumulate(mean_distances.begin(), mean_distances.end(), 0.0) /
+       static_cast<double>(count);
+   double variance = 0.0;
+@@ -436,10 +453,13 @@
+   for (std::size_t index = 0; index < count; ++index) {
+     if (mean_distances[index] <= threshold) output.points.push_back(input.points[index]);
+   }
++  timer.mark("sor.filter");
+   return output;
+ }
+ 
+-PointCloudXYZ PctMapCleaner::radius_filter(PointCloudXYZ input) const {
++PointCloudXYZ PctMapCleaner::radius_filter(
++    PointCloudXYZ input, std::map<std::string, double>& detail_times) const {
++  DetailTimer timer(detail_times);
+   if (!config_.ror_enable || input.points.empty()) return input;
+ 
+   using Grid = std::unordered_map<Cell3, std::vector<std::size_t>, Cell3Hash>;
+@@ -449,6 +469,7 @@
+     grid[point_cell(input.points[index], config_.ror_radius)].push_back(index);
+   }
+ 
++  timer.mark("ror.grid");
+   const double radius_squared = config_.ror_radius * config_.ror_radius;
+   std::vector<unsigned char> keep(input.points.size(), 0U);
+   const int workers = worker_count(config_.threads);
+@@ -473,11 +494,13 @@
+         static_cast<std::size_t>(config_.ror_min_neighbors) ? 1U : 0U;
+   }
+ 
++  timer.mark("ror.query");
+   PointCloudXYZ output;
+   output.points.reserve(input.points.size());
+   for (std::size_t index = 0; index < input.points.size(); ++index) {
+     if (keep[index] != 0U) output.points.push_back(input.points[index]);
+   }
++  timer.mark("ror.output");
+   return output;
+ }
+ 
+@@ -620,7 +643,9 @@
+   return output;
+ }
+ 
+-PointCloudXYZ PctMapCleaner::complete_ground_holes(PointCloudXYZ input) const {
++PointCloudXYZ PctMapCleaner::complete_ground_holes(
++    PointCloudXYZ input, std::map<std::string, double>& detail_times) const {
++  DetailTimer timer(detail_times);
+   if (!config_.ground_completion_enable || input.points.empty()) return input;
+ 
+   using SurfaceGrid = std::unordered_map<Cell2, std::vector<std::pair<double, std::size_t>>, Cell2Hash>;
+@@ -631,6 +656,7 @@
+     grid[cell].emplace_back(input.points[index].z, index);
+   }
+ 
++  timer.mark("ground_completion.grid");
+   const int radius_cells = static_cast<int>(std::ceil(
+       config_.ground_support_radius / config_.ground_spacing));
+   std::vector<Cell2> support_offsets;
+@@ -654,6 +680,7 @@
+   std::vector<Cell2> candidates(candidate_set.begin(), candidate_set.end());
+   std::sort(candidates.begin(), candidates.end());
+ 
++  timer.mark("ground_completion.candidates");
+   const int workers = worker_count(config_.threads);
+   std::vector<std::vector<CompletionCandidate>> local_candidates(
+       static_cast<std::size_t>(workers));
+@@ -758,6 +785,7 @@
+     }
+   }
+ 
++  timer.mark("ground_completion.evaluate");
+   std::vector<CompletionCandidate> accepted;
+   for (auto& local : local_candidates) {
+     accepted.insert(accepted.end(), local.begin(), local.end());
+@@ -821,6 +849,7 @@
+           static_cast<float>(candidate.z)});
+     }
+   }
++  timer.mark("ground_completion.components_output");
+   return output;
+ }
+ 
+@@ -844,19 +873,19 @@
+   report.finite_points = input.points.size();
+   if (input.points.empty()) throw std::invalid_argument("input has no finite XYZ points");
+ 
+-  run_stage("pre_sampling", [this](PointCloudXYZ cloud) {
+-    return pre_downsample(std::move(cloud));
++  run_stage("pre_sampling", [this, &report](PointCloudXYZ cloud) {
++    return pre_downsample(std::move(cloud), report.detail_times);
+   }, input);
+   report.pre_sampled_points = input.points.size();
+   report.pre_sampling_voxels = input.points.size();
+ 
+-  run_stage("sor", [this](PointCloudXYZ cloud) {
+-    return statistical_filter(std::move(cloud));
++  run_stage("sor", [this, &report](PointCloudXYZ cloud) {
++    return statistical_filter(std::move(cloud), report.detail_times);
+   }, input);
+   report.sor_points = input.points.size();
+ 
+-  run_stage("ror", [this](PointCloudXYZ cloud) {
+-    return radius_filter(std::move(cloud));
++  run_stage("ror", [this, &report](PointCloudXYZ cloud) {
++    return radius_filter(std::move(cloud), report.detail_times);
+   }, input);
+   report.ror_points = input.points.size();
+ 
+@@ -872,8 +901,8 @@
+   report.final_sampling_voxels = input.points.size();
+ 
+   const std::size_t before_completion = input.points.size();
+-  run_stage("ground_completion", [this](PointCloudXYZ cloud) {
+-    return complete_ground_holes(std::move(cloud));
++  run_stage("ground_completion", [this, &report](PointCloudXYZ cloud) {
++    return complete_ground_holes(std::move(cloud), report.detail_times);
+   }, input);
+   report.completion_added_points = input.points.size() - before_completion;
+   report.final_points = input.points.size();
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -108,6 +108,15 @@
+   }
+ 
+   read_value(root, "sor", "enable", config.sor_enable);
++  std::string backend = "legacy";
++  read_value(root, "sor", "search_backend", backend);
++  if (backend == "legacy") {
++    config.sor_search_backend = pct_map_cleaner::SorSearchBackend::Legacy;
++  } else if (backend == "single_exact") {
++    config.sor_search_backend = pct_map_cleaner::SorSearchBackend::SingleExact;
++  } else {
++    throw std::invalid_argument("sor.search_backend must be legacy or single_exact");
++  }
+   read_value(root, "sor", "nb_neighbors", config.sor_neighbors);
+   read_value(root, "sor", "std_ratio", config.sor_std_ratio);
+ 
+@@ -162,6 +171,9 @@
+   for (const auto& stage : report.stage_times) {
+     std::cout << "  " << stage.first << ": " << stage.second << " s" << std::endl;
+   }
++  for (const auto& detail : report.detail_times) {
++    std::cout << "  detail." << detail.first << ": " << detail.second << " s" << std::endl;
++  }
+   std::cout << "  total: " << report.total_time << " s" << std::endl
+             << "  output: " << output << std::endl
+             << "===============================================" << std::endl;
+@@ -190,6 +202,10 @@
+     PctMapCleaner cleaner(config);
+     const CleanerReport report = cleaner.clean_file(config.input_pcd, config.output_pcd);
+     print_report(report, config.output_pcd);
++    std::cout << "  sor backend: " << (config.sor_enable ?
++        (config.sor_search_backend == pct_map_cleaner::SorSearchBackend::Legacy ?
++         "legacy" : "single_exact") : "disabled") << std::endl
++              << "  requested threads: " << config.threads << std::endl;
+     return 0;
+   } catch (const std::exception& error) {
+     std::cerr << "[ERROR] " << error.what() << std::endl;
+--- a/include/pct_map_cleaner.hpp
++++ b/include/pct_map_cleaner.hpp
+@@ -18,6 +18,8 @@
+   std::vector<Point3f> points;
+ };
+ 
++enum class SorSearchBackend { Legacy, SingleExact };
++
+ struct CleanerConfig {
+   std::string input_pcd;
+   std::string output_pcd;
+@@ -27,6 +29,7 @@
+   double max_pre_rep_error = 0.05;
+ 
+   bool sor_enable = true;
++  SorSearchBackend sor_search_backend = SorSearchBackend::Legacy;
+   int sor_neighbors = 16;
+   double sor_std_ratio = 2.5;
+ 
+@@ -72,6 +75,7 @@
+   std::size_t completion_holes_filled = 0;
+ 
+   std::map<std::string, double> stage_times;
++  std::map<std::string, double> detail_times;
+   double total_time = 0.0;
+ };
+ 
+@@ -98,12 +102,16 @@
+   CleanerConfig config_;
+ 
+   PointCloudXYZ remove_non_finite(PointCloudXYZ input) const;
+-  PointCloudXYZ pre_downsample(PointCloudXYZ input) const;
+-  PointCloudXYZ statistical_filter(PointCloudXYZ input) const;
+-  PointCloudXYZ radius_filter(PointCloudXYZ input) const;
++  PointCloudXYZ pre_downsample(PointCloudXYZ input,
++      std::map<std::string, double>& detail_times) const;
++  PointCloudXYZ statistical_filter(PointCloudXYZ input,
++      std::map<std::string, double>& detail_times) const;
++  PointCloudXYZ radius_filter(PointCloudXYZ input,
++      std::map<std::string, double>& detail_times) const;
+   PointCloudXYZ floating_cluster_filter(PointCloudXYZ input) const;
+   PointCloudXYZ final_uniform_sampling(PointCloudXYZ input) const;
+-  PointCloudXYZ complete_ground_holes(PointCloudXYZ input) const;
++  PointCloudXYZ complete_ground_holes(PointCloudXYZ input,
++      std::map<std::string, double>& detail_times) const;
+ };
+ 
+ }  // namespace pct_map_cleaner

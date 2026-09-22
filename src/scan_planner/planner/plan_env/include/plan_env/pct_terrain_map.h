@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include <pct_planner/PctTerrainMap.h>
+#include <global_pct_planner/PctTerrainMap.h>
 
 class PctTerrainMap {
 public:
@@ -27,7 +27,8 @@ public:
 
   static const char* queryStatusName(QueryStatus status);
 
-  bool setFromMessage(const pct_planner::PctTerrainMap& msg, std::string& error);
+  bool setFromMessage(const global_pct_planner::PctTerrainMap& msg,
+                      std::string& error);
   bool valid() const { return valid_; }
   const std::string& frameId() const { return frame_id_; }
 

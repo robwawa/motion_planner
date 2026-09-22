@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   controller_interface
   gazebo_msgs
   gazebo_ros
+  global_pct_planner
   geometry_msgs
   hardware_interface
   message_generation
@@ -45,7 +46,7 @@ generate_messages(DEPENDENCIES std_msgs)
 catkin_package(
   INCLUDE_DIRS include control_include
   LIBRARIES pct_scan_gazebo_livox pct_scan_gazebo_control pct_scan_gazebo_contact pct_scan_gazebo_draw_force
-  CATKIN_DEPENDS controller_interface gazebo_msgs gazebo_ros geometry_msgs hardware_interface message_runtime motion_planner_log nav_msgs pluginlib realtime_tools roscpp rospy sensor_msgs std_msgs tf tf2_ros urdf
+  CATKIN_DEPENDS controller_interface gazebo_msgs gazebo_ros global_pct_planner geometry_msgs hardware_interface message_runtime motion_planner_log nav_msgs pluginlib realtime_tools roscpp rospy sensor_msgs std_msgs tf tf2_ros urdf
 )
 
 include_directories(

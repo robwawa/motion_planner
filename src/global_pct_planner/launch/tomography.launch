@@ -1,0 +1,24 @@
+<launch>
+  <!-- Kept for launch-file compatibility; the new implementation is CPU-only. -->
+  <arg name="backend" default="cpu" />
+  <arg name="package_path" default="$(find global_pct_planner)" />
+  <!-- Resolve the source package from either source-space or install-space. -->
+  <arg name="source_package_path"
+       default="$(eval arg('package_path') if arg('package_path').endswith('/src/global_pct_planner') else arg('package_path') + '/../../../src/global_pct_planner')" />
+  <!-- This is the explicit PCD input consumed by the C++ node. -->
+  <arg name="pcd_map_file"
+       default="$(arg source_package_path)/rsc/pcd/building2_9.pcd" />
+  <arg name="tomogram_name" default="building2_9" />
+  <!-- This is the explicit .pctm output directory consumed by the C++ node. -->
+  <arg name="export_dir"
+       default="$(arg source_package_path)/rsc/tomogram" />
+
+  <rosparam command="load"
+            file="$(find global_pct_planner)/config/global_pct_planner.yaml" />
+  <node pkg="global_pct_planner" type="pct_tomography_node"
+        name="pointcloud_tomography" output="screen">
+    <param name="pcd_file" value="$(arg pcd_map_file)" />
+    <param name="tomogram_name" value="$(arg tomogram_name)" />
+    <param name="export_dir" value="$(arg export_dir)" />
+  </node>
+</launch>
