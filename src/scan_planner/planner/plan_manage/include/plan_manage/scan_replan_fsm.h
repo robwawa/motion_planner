@@ -3,14 +3,19 @@
 
 #include <Eigen/Eigen>
 #include <algorithm>
+#include <atomic>
+#include <actionlib/server/simple_action_server.h>
+#include <boost/bind/bind.hpp>
 #include <geometry_msgs/PoseStamped.h>
 #include <iostream>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <navigation_msgs/FollowReferencePathAction.h>
 #include <sensor_msgs/Imu.h>
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>
-#include <std_msgs/Empty.h>
+#include <mutex>
+#include <memory>
 #include <vector>
 #include <visualization_msgs/Marker.h>
 
@@ -81,6 +86,12 @@ namespace scan_planner
     double direction_change_min_speed_;
     double direction_change_stop_speed_;
     double direction_change_brake_acc_ratio_;
+    double progress_timeout_sec_{8.0};
+    double progress_min_distance_{0.10};
+    double progress_tracking_error_tolerance_{1.5};
+    double goal_reached_tolerance_{0.5};
+    double endpoint_truncation_tolerance_{0.05};
+    int max_progress_replan_attempts_{2};
     std::string self_inflation_frame_id_;
 
     /* planning data */
@@ -88,10 +99,20 @@ namespace scan_planner
     bool rviz_height_ready_;
     bool go2_execution_frozen_;
     bool enable_fail_safe_, need_hover_stop_;
-    bool global_replan_after_local_failure_{false};
+    bool emergency_stop_result_pending_{false};
+    std::string emergency_stop_reason_;
     FSM_EXEC_STATE exec_state_;
     int continuously_called_times_{0};
     int replan_fail_count_{0};
+    int progress_replan_attempts_{0};
+    bool progress_watchdog_initialized_{false};
+    bool tracking_error_initialized_{false};
+    bool active_route_endpoint_truncated_{false};
+    Eigen::Vector3d progress_anchor_position_{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d requested_route_goal_{Eigen::Vector3d::Zero()};
+    ros::WallTime progress_anchor_time_;
+    ros::WallTime tracking_error_since_;
+    double progress_anchor_remaining_distance_{0.0};
     int max_replan_fail_count_{1000};
     ros::Time last_freeze_update_time_;
 
@@ -115,8 +136,55 @@ namespace scan_planner
     ros::NodeHandle node_;
     ros::Timer exec_timer_, safety_timer_;
     ros::Subscriber goal_sub_, odom_sub_, path_sub_, go2_execution_frozen_sub_;
-    ros::Publisher replan_pub_, new_pub_, bspline_pub_, data_disp_pub_, self_inflation_pub_,
+    ros::Publisher new_pub_, bspline_pub_, data_disp_pub_, self_inflation_pub_,
         global_reference_path_pub_, downsampled_reference_path_pub_, reference_path_z_profile_pub_;
+
+    using FollowActionServer =
+        actionlib::SimpleActionServer<navigation_msgs::FollowReferencePathAction>;
+    FollowActionServer follow_action_server_;
+    std::mutex follow_mutex_;
+    navigation_msgs::FollowReferencePathGoalConstPtr pending_follow_goal_;
+    bool follow_request_pending_{false};
+    bool follow_result_ready_{false};
+    bool follow_cancel_requested_{false};
+    uint64_t cancel_request_mission_id_{0};
+    uint64_t cancel_request_route_id_{0};
+    uint8_t follow_result_code_{navigation_msgs::FollowReferencePathResult::FAILED};
+    std::string follow_result_message_;
+    std::string follow_result_reason_code_;
+    std::string follow_state_;
+    double follow_distance_remaining_{0.0};
+    geometry_msgs::PoseStamped follow_execution_goal_;
+    geometry_msgs::PoseStamped follow_final_pose_;
+    double follow_result_remaining_distance_{0.0};
+    bool follow_result_endpoint_truncated_{false};
+    uint64_t active_mission_id_{0};
+    uint64_t active_route_id_{0};
+    uint64_t last_goal_mission_id_{0};
+    uint64_t last_goal_route_id_{0};
+    bool have_last_goal_id_{false};
+
+    // Route reception and route activation are deliberately separate. The
+    // action callback queues a command, while the FSM timer owns planner data
+    // and activates the newest route when it is safe to do so.
+    nav_msgs::Path pending_route_;
+    uint64_t pending_route_mission_id_{0};
+    uint64_t pending_route_id_{0};
+    uint64_t pending_route_request_id_{0};
+    uint32_t pending_route_planning_attempt_{0};
+    std::string pending_route_trigger_;
+    std::string pending_route_trigger_reason_;
+    uint64_t pending_route_generation_{0};
+    bool pending_route_ready_{false};
+    uint64_t pending_follow_generation_{0};
+    std::atomic<uint64_t> route_generation_{0};
+    uint64_t active_execution_mission_id_{0};
+    uint64_t active_execution_route_id_{0};
+    uint64_t active_execution_request_id_{0};
+    uint32_t active_execution_planning_attempt_{0};
+    std::string active_execution_trigger_;
+    std::string active_execution_trigger_reason_;
+    uint64_t active_execution_generation_{0};
 
     /* helper functions */
     bool callReboundReplan(bool flag_use_poly_init, bool flag_randomPolyTraj); // front-end and back-end method
@@ -138,12 +206,16 @@ namespace scan_planner
     bool planNextWaypoint();
     bool isWaypointSequenceMode() const;
     bool usePolylineRollingWindow() const;
+    bool activatePendingRoute(std::string &error);
+    void scheduleRouteExecution();
+    void setFollowState(const std::string &state);
     double projectReferencePathProgress(const Eigen::Vector3d &point,
                                         double min_progress,
                                         double max_progress) const;
     bool adjustGlobalTargetIfOccupied();
     void getLocalTarget();
     void finishProcess();
+    void updateProgressWatchdog();
     void publishSelfInflationMarker();
     void publishGlobalReferencePath();
     double getOdomYaw() const;
@@ -156,6 +228,15 @@ namespace scan_planner
     void rvizGoalCallback(const geometry_msgs::PoseStampedConstPtr &msg);
     void waypointCallback(const nav_msgs::PathConstPtr &msg);
     void pathCallback(const nav_msgs::PathConstPtr &msg);
+    bool acceptReferencePath(const nav_msgs::Path &msg, std::string &error);
+    void followReferencePathExecute(
+        const navigation_msgs::FollowReferencePathGoalConstPtr &goal);
+    void processPendingFollowRequest();
+    void finishFollowAction(uint8_t result, const std::string &message,
+                            uint64_t expected_mission_id = 0,
+                            uint64_t expected_route_id = 0,
+                            uint64_t expected_route_generation = 0,
+                            const std::string &reason_code = "");
     void odometryCallback(const nav_msgs::OdometryConstPtr &msg);
     void go2ExecutionFrozenCallback(const std_msgs::BoolConstPtr &msg);
 
@@ -163,6 +244,10 @@ namespace scan_planner
 
   public:
     SCANReplanFSM(/* args */)
+        : follow_action_server_(node_, "/scan/follow_reference_path",
+                                boost::bind(&SCANReplanFSM::followReferencePathExecute,
+                                            this, boost::placeholders::_1),
+                                false)
     {
     }
     ~SCANReplanFSM()

@@ -149,7 +149,7 @@ void publishOdom(const ros::TimerEvent&)
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "open_loop_controller");
-  motion_planner_log::initialize("open_loop_controller", argv[0]);
+  motion_planner_log::initialize("scan_planner", "open_loop_controller", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: open-loop controller.");
 
   ros::NodeHandle nh;

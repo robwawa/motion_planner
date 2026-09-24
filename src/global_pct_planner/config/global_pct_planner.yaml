@@ -1,52 +1,101 @@
+# PCT 地图、层析和全局规划的统一参数配置。
 pct:
   map:
+    # 水平栅格分辨率，单位：米/栅格。
     resolution: 0.10
+    # 地图基准地面高度，单位：米；用于层析和高程计算。
     ground_h: 0.0
+    # 相邻 PCT 高程层之间的垂直间隔，单位：米。
     slice_dh: 0.5
   traversability:
+    # 通行性计算使用的平面邻域核尺寸，单位：栅格。
     kernel_size: 7
+    # 高程分析窗口的最小垂直范围，单位：米。
     interval_min: 0.50
+    # 高程窗口被判定为空闲区域所需的最小自由比例。
     interval_free: 0.50
+    # 允许的最大坡度。
     slope_max: 0.40
+    # 允许跨越的最大高程台阶，单位：米。
     step_max: 0.30
+    # 栅格被判定为可站立区域所需的有效点比例。
     standable_ratio: 0.50
+    # 静态不可通行区域的代价屏障值；通常为 50。
     cost_barrier: 50.0
+    # 通行性计算使用的安全边界，单位：米。
     safe_margin: 0.5
+    # 静态地图障碍物的额外膨胀距离，单位：米。
     inflation: 0.1
+    # 静态 PCT 栅格允许进入 A* 的最大代价；代价大于该值不可通行。
     cost_threshold: 49.0
 
+# 点云层析节点的话题和坐标系配置。
 pointcloud_tomography:
+  # 输出地图使用的全局坐标系。
   map_frame: map
+  # 生成层析地图时订阅的输入点云话题。
   pointcloud_topic: /global_points
+  # 地面/高程图层话题前缀，后接层编号。
   layer_G_topic: /layer_G_
+  # 通行代价图层话题前缀，后接层编号。
   layer_C_topic: /layer_C_
+  # 层析结果汇总话题。
   tomogram_topic: /tomogram
+  # PCT 地形地图消息话题。
   terrain_map_topic: /pct/terrain_map
 
+# 全局 PCT 规划器参数。
 global_pct_planner:
+  # 规划输入、输出和动态点云使用的全局坐标系。
   navigation_frame: map
+  # 机器人基座参考高度，单位：米；用于起终点层选择和路径高度转换。
   body_height: 0.4
+  # 起终点与候选 PCT 层之间允许的最大高度差，单位：米。
   layer_height_tolerance: 0.75
+  # 是否对 A* 初始路径执行 GPMP/轨迹优化。
   optimize_path: true
+  # 起点和终点搜索可通行栅格时的最大吸附半径，单位：米。
   endpoint_snap_radius: 1.5
+  # 等待 .pctm 地图生成或加载的最长时间，单位：秒。
   wait_timeout: 300.0
+  # 路径允许的最大航向变化率，单位由规划器内部约定。
   max_heading_rate: 10.0
+  # 是否使用五次多项式进行优化路径拟合。
   use_quintic: true
+  # 动态障碍物重规划参数。
   dynamic_replan:
+    # 是否启用动态障碍代价和动态重规划。
     enabled: true
+    # 动态感知节点发布的已确认动态障碍点云话题。
     cloud_topic: /dynamic_perception/dynamic_cloud
+    # 动态感知输入健康状态话题。
     health_topic: /dynamic_perception/scan_healthy
+    # 超过该时间未收到有效动态点云后清空动态代价，单位：秒。
     dynamic_source_timeout: 0.5
+    # 动态点云快照处理频率，单位：Hz。
     update_rate: 10.0
+    # 动态调试点云和动态代价可视化发布频率，单位：Hz。
     debug_publish_rate: 1.0
+    # 单个动态快照允许处理的最大点数。
     max_points_per_snapshot: 200000
+    # 单次调试话题最多发布的动态点数。
     max_debug_points: 100000
+    # 相对于 PCT 局部 ground 的最低动态障碍高度，低于该值的点忽略，单位：米。
     terrain_ignore_height: 0.08
+    # 动态点被分配到 PCT 层时允许的地面/层高误差，单位：米。
     layer_height_tolerance: 0.25
+    # 机器人水平碰撞半径，单位：米。
     robot_radius: 0.32
+    # 机器人碰撞半径之外的安全边界，单位：米。
     safety_margin: 0.15
+    # 动态障碍代价向周围栅格膨胀的总半径，单位：米。
     inflation_radius: 0.50
+    # 动态碰撞检测相对于 body_height 的顶部余量，单位：米；
+    # 动态投影顶部约为 body_height + collision_top_margin。
     collision_top_margin: 0.20
+    # 动态障碍栅格的 lethal 代价；必须大于静态 cost_threshold。
     lethal_cost: 100
+    # 动态代价快照允许使用的最大内存，单位：MiB。
     max_dynamic_memory_mb: 128.0
+    # 动态快照在规划过程中发生变化时允许的重新规划重试次数。
     max_snapshot_retries: 1

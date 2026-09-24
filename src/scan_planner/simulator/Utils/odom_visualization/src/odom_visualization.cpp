@@ -399,7 +399,7 @@ void odom_callback(const nav_msgs::Odometry::ConstPtr& msg)
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "odom_visualization");
-  motion_planner_log::initialize("odom_visualization", argv[0]);
+  motion_planner_log::initialize("scan_planner", "odom_visualization", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: odometry visualization.");
   ros::NodeHandle n("~");
 

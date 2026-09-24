@@ -103,7 +103,7 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "state_from_gazebo");
-  motion_planner_log::initialize("state_from_gazebo", argv[0]);
+  motion_planner_log::initialize("pct_scan_gazebo", "state_from_gazebo", argv[0]);
     MOTION_PLANNER_LOG_INFO("Node starting: Gazebo state bridge.");
     ros::NodeHandle nh("~");
     ros::NodeHandle node;

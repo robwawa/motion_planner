@@ -41,9 +41,9 @@ namespace gazebo
                 int argc = 0;
                 char** argv = NULL;
                 ros::init(argc,argv,"gazebo_visual",ros::init_options::NoSigintHandler|ros::init_options::AnonymousName);
-                motion_planner_log::initialize("pct_scan_gazebo_draw_force");
+                motion_planner_log::initialize("pct_scan_gazebo", "pct_scan_gazebo_draw_force", nullptr);
             }
-            motion_planner_log::initialize("pct_scan_gazebo_draw_force");
+            motion_planner_log::initialize("pct_scan_gazebo", "pct_scan_gazebo_draw_force", nullptr);
             if (!_sdf->HasElement("topicName"))
                 MOTION_PLANNER_LOG_WARN("Force draw plugin missing <topicName>; using /default_force_draw");
 

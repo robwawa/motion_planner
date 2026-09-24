@@ -49,7 +49,8 @@
     <arg name="init_y" value="7.0" />
     <arg name="init_z" value="$(arg body_height)" />
   </include>
-  <include file="$(find pct_scan_navigation)/launch/navigation.launch">
+  <include file="$(find navigation_supervisor)/launch/navigation_supervisor.launch">
+    <arg name="launch_planners" value="false" />
     <arg name="body_pose_topic" value="/Odometry_gazebo" />
     <arg name="default_goal_z" value="$(arg body_height)" />
   </include>

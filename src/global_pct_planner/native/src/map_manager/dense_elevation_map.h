@@ -1,5 +1,11 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
 #include <Eigen/Dense>
 
 class DenseElevationMap {
@@ -11,6 +17,10 @@ class DenseElevationMap {
             const Eigen::MatrixXd& cost_map, const Eigen::MatrixXd& ele_mask,
             const Eigen::MatrixXd& height, const Eigen::MatrixXd& ceiling,
             const Eigen::MatrixXd& grad_x, const Eigen::MatrixXd& grad_y);
+
+  void SetDynamicCostMap(const uint8_t* costs, std::size_t count,
+                         uint8_t lethal_cost);
+  void ClearDynamicCostMap();
 
   double GetValueBilinear(const int layer, const double x, const double y,
                           Eigen::Vector2d* grad = nullptr);
@@ -33,7 +43,7 @@ class DenseElevationMap {
 
   double inline GetNominalCost(int layer, double x, double y) {
     auto idx = CoordsToIndex(layer, x, y);
-    return cost_(idx[0], idx[1]);
+    return EffectiveCost(idx[0], idx[1]);
   };
 
   std::array<int, 2> inline CoordsToIndex(int layer, double x, double y) {
@@ -62,6 +72,8 @@ class DenseElevationMap {
   double GetRealCostSafe(int layer, double x, double y,
                          const double height_hint);
 
+  double EffectiveCost(int row, int col) const;
+
  private:
   bool debug_ = false;
   double resolution_ = 0.0;
@@ -80,4 +92,8 @@ class DenseElevationMap {
   Eigen::MatrixXd ceiling_;
   Eigen::MatrixXd grad_x_;
   Eigen::MatrixXd grad_y_;
+
+  std::vector<uint8_t> dynamic_cost_;
+  uint8_t dynamic_lethal_cost_ = 100;
+  bool dynamic_cost_enabled_ = false;
 };

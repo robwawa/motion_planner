@@ -521,7 +521,7 @@ void shutdownController()
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "mpc_controller");
-  motion_planner_log::initialize("mpc_controller", argv[0]);
+  motion_planner_log::initialize("scan_planner", "mpc_controller", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: MPC controller.");
   ros::NodeHandle node;
   ros::NodeHandle private_node("~");

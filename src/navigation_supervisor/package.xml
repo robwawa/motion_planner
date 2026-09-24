@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<package>
+  <name>navigation_supervisor</name>
+  <version>0.1.0</version>
+  <description>Behavior-tree navigation supervisor for PCT and SCAN.</description>
+  <maintainer email="maintainer@example.com">motion_planner</maintainer>
+  <license>GPL-2.0-only</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>actionlib</build_depend>
+  <build_depend>behaviortree_cpp_v3</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>global_pct_planner</build_depend>
+  <build_depend>motion_planner_log</build_depend>
+  <build_depend>nav_msgs</build_depend>
+  <build_depend>navigation_msgs</build_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>tf2</build_depend>
+  <build_depend>tf2_geometry_msgs</build_depend>
+  <build_depend>tf2_ros</build_depend>
+
+  <run_depend>actionlib</run_depend>
+  <run_depend>behaviortree_cpp_v3</run_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>global_pct_planner</run_depend>
+  <run_depend>motion_planner_log</run_depend>
+  <run_depend>nav_msgs</run_depend>
+  <run_depend>navigation_msgs</run_depend>
+  <run_depend>roscpp</run_depend>
+  <run_depend>tf2</run_depend>
+  <run_depend>tf2_geometry_msgs</run_depend>
+  <run_depend>tf2_ros</run_depend>
+
+  <test_depend>gtest</test_depend>
+  <export/>
+</package>

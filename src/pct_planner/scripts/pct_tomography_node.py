@@ -19,7 +19,7 @@ def package_path():
 
 
 def main():
-    logger = configure('pct_tomography_node')
+    logger = configure('pct_planner', 'pct_tomography_node')
     package_root = package_path()
     script_dir = os.path.join(package_root, 'tomography', 'scripts')
     config_dir = os.path.join(package_root, 'tomography')

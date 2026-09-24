@@ -235,6 +235,19 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(global_pct_dynamic_obstacle_test global_pct_core ${catkin_LIBRARIES})
     add_dependencies(global_pct_dynamic_obstacle_test ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
   endif()
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/dense_elevation_map_dynamic_test.cpp")
+    catkin_add_gtest(global_pct_dense_elevation_map_dynamic_test
+      test/dense_elevation_map_dynamic_test.cpp)
+    if(TARGET global_pct_dense_elevation_map_dynamic_test)
+      target_link_libraries(global_pct_dense_elevation_map_dynamic_test map_manager)
+      set_target_properties(global_pct_dense_elevation_map_dynamic_test PROPERTIES
+        COMPILE_FLAGS "${PCT_NATIVE_COMPILE_OPTIONS}")
+      add_dependencies(global_pct_dense_elevation_map_dynamic_test
+        ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+    endif()
+  else()
+    message(STATUS "Skipping dense elevation map test: source file is missing")
+  endif()
   catkin_add_gtest(global_pct_action_interface_test test/action_interface_test.cpp)
   if(TARGET global_pct_action_interface_test)
     target_link_libraries(global_pct_action_interface_test ${catkin_LIBRARIES})
@@ -269,6 +282,7 @@ set(GLOBAL_PCT_RPATH "${PCT_GTSAM_LIB_DIR};${PCT_METIS_LIB_DIR}")
 foreach(global_pct_target global_pct_core pct_tomography_node global_pct_planner_node
         ele_planner_lib gpmp_optimizer map_manager common_smoothing a_star_search
         global_pct_tomogram_test global_pct_dynamic_obstacle_test
+        global_pct_dense_elevation_map_dynamic_test
         global_pct_action_interface_test global_pct_planner_core_test
         global_pct_pctm_fixture_test global_pct_legacy_astar_integration_test)
   if(TARGET ${global_pct_target})
@@ -290,6 +304,7 @@ if(CATKIN_ENABLE_TESTING)
       "${PCT_METIS_LIB_DIR}:${PCT_GTSAM_LIB_DIR}:$ENV{LD_LIBRARY_PATH}")
   foreach(global_pct_test global_pct_tomogram_test
           global_pct_dynamic_obstacle_test
+          global_pct_dense_elevation_map_dynamic_test
           global_pct_action_interface_test global_pct_planner_core_test
           global_pct_pctm_fixture_test global_pct_legacy_astar_integration_test)
     if(TARGET ${global_pct_test})

@@ -11,6 +11,14 @@
 namespace motion_planner_log {
 
 // Must be called once after ros::init() and before the first project log.
+// Logs are stored in <log-root>/<package_name>/<YYYYMMDD>.log. The module
+// name remains in each line so multiple nodes can share one package file.
+void initialize(const std::string& package_name,
+                const std::string& module_name,
+                const char* argv0);
+
+// Backward-compatible form for external callers. The module is also used as
+// the package name.
 void initialize(const std::string& module_name, const char* argv0 = nullptr);
 
 // printf-style entry point used by the project macros.

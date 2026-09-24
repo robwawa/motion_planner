@@ -1,27 +1,37 @@
 # PCT-SCAN Navigation
 
-`navigation_manager.py` submits the current body pose and the user's original
-3D goal to `/pct/plan_path`, validates the result, and publishes the remaining
-route on `/navigation/reference_path` for SCAN.
+The navigation supervisor is the single owner of mission execution. It accepts
+goals from `/goal_pose_3d` and `/move_base_simple/goal`, calls the raw PCT
+planner, processes the returned route, and sends the processed route to SCAN
+through `/scan/follow_reference_path`.
 
-## Global replan handoff
+The route pipeline is:
 
-PCT computes global multi-layer routes and SCAN handles local collision
-avoidance. SCAN is the sole source of global-replan requests.
+```text
+goal_pose_3d / RViz goal
+        -> navigation_supervisor
+        -> /pct/plan_path                 (raw global path)
+        -> ReferencePathProcessor         (start validation and truncation)
+        -> /navigation/reference_path     (visualization)
+        -> /scan/follow_reference_path    (SCAN Action)
+```
 
-When SCAN exhausts `fsm/max_replan_fail_count` local replan attempts in
-reference-path mode, it first completes its emergency stop and then publishes
-one `/scan/global_replan_request` event.  `navigation_manager` checks whether
-the robot is already within `goal_reached_distance` of PCT's snapped endpoint.
-Otherwise it sends PCT a new Action request from the latest odometry.
+`global_pct_planner` no longer owns route validation or publishes
+`/pct/global_path`. `navigation_supervisor` owns mission and route IDs, global
+replanning, cancellation, and recovery. SCAN keeps local trajectory
+generation, local replanning, and braking; when its local recovery budget is
+exhausted it returns `FAILED` with the reason `local_replan_exhausted`; the
+navigation behavior tree decides whether another global planning attempt is
+allowed.
 
-For each user goal, SCAN can hand off to PCT at most
-`global_replan_max_cycles` times (default: 3). This total includes handoffs
-whose PCT Action succeeds, so a route that repeatedly fails local planning
-cannot cycle indefinitely. Once exhausted, the navigation manager publishes
-`REPLAN_EXHAUSTED` and ignores further SCAN replan requests until a new user
-goal arrives.
+Launch the integrated stack with:
 
-Within each accepted handoff, failed PCT global replans retry at most
-`replan_max_attempts` times in total (default: 3), with 2 s and 4 s delays.
-This Action retry budget is independent of the per-goal handoff budget.
+```bash
+roslaunch pct_scan_navigation pct_scan_demo.launch
+```
+
+The standalone supervisor launch is:
+
+```bash
+roslaunch navigation_supervisor navigation_supervisor.launch
+```

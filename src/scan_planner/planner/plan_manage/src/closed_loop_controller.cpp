@@ -244,7 +244,7 @@ void cmdCallback(const ros::TimerEvent &)
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "closed_loop_controller");
-  motion_planner_log::initialize("closed_loop_controller", argv[0]);
+  motion_planner_log::initialize("scan_planner", "closed_loop_controller", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: closed-loop controller.");
   ros::NodeHandle node;
   ros::NodeHandle nh("~");

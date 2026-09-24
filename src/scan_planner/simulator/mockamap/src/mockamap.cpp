@@ -63,7 +63,7 @@ int
 main(int argc, char** argv)
 {
   ros::init(argc, argv, "mockamap");
-  motion_planner_log::initialize("mockamap", argv[0]);
+  motion_planner_log::initialize("scan_planner", "mockamap", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: mock map generator.");
   ros::NodeHandle nh;
   ros::NodeHandle nh_private("~");

@@ -1,34 +1,42 @@
 <launch>
+  <!-- 启动入口参数：未提供 default 的项目由上层 launch 传入。 -->
+  <!-- 仿真/实机模式、传感器类型及导航模式：navi_mode=1 手动目标，2 预设航点，3 参考路径。 -->
   <arg name="is_real_world"/>
   <arg name="navi_mode"/>
   <arg name="sensor_type"/>
+  <!-- 机体位姿、传感器位姿、点云和深度图输入话题。 -->
   <arg name="body_pose_topic"/>
   <arg name="sensor_pose_topic"/>
   <arg name="cloud_topic"/>
+  <!-- 点云是否已在世界坐标系；实机模式下是否需要使用传感器外参。 -->
   <arg name="cloud_is_world"/>
   <arg name="depth_topic"/>
+  <!-- 深度相机内参，cx/cy 为像素坐标，fx/fy 为像素单位的焦距。 -->
   <arg name="cx"/>
   <arg name="cy"/>
   <arg name="fx"/>
   <arg name="fy"/>
+  <!-- 参考路径输入及处理方式；min_snap_single_pass 单次生成，polyline_rolling_window 滚动跟随折线。 -->
   <arg name="reference_path_topic" default="/navigation/reference_path"/>
+  <!-- 参考路径 z 模式：base 直接使用路径高度，ground 在路径高度上叠加 body_height；并配置采样间距和简化容差（m）。 -->
   <arg name="reference_path_z_mode" default="base"/>
   <arg name="reference_path_min_distance" default="0.5"/>
   <arg name="reference_path_simplify_tolerance" default="0.15"/>
   <arg name="reference_path_mode" default="min_snap_single_pass"/>
+  <!-- 导航坐标系及地形约束开关；body_height 为机体参考点离地高度（m）。 -->
   <arg name="navigation_frame" default="map"/>
   <arg name="use_scan_support" default="false"/>
   <arg name="use_pct_traversability" default="true"/>
   <arg name="pct_terrain_map_topic" default="/pct/terrain_map"/>
   <arg name="body_height" default="0.4"/>
 
-  <!-- public parameters -->
+  <!-- 对外共享的运动约束：速度（m/s）、加速度（m/s²）和规划前视距离（m）。 -->
   <arg name="max_vel" default="0.75"/>
   <arg name="max_acc" default="0.5"/>
   <!-- 前视距离 -->
   <arg name="planning_horizon" default="3.5"/>
 
-  <!-- main node -->
+  <!-- SCAN 规划主节点：以下 remap 将上层传感器话题接入局部地图。 -->
   <node pkg="scan_planner" name="scan_planner_node" type="scan_planner_node" output="screen" clear_params="true">
     <remap from="/grid_map/body_pose" to="$(arg body_pose_topic)"/>
     <remap from="/grid_map/sensor_pose" to="$(arg sensor_pose_topic)"/>
@@ -38,21 +46,34 @@
     <remap from="/grid_map/depth" to="$(arg depth_topic)"/>
     <param name="grid_map/need_extrinsic" value="$(arg is_real_world)" type="bool"/>
 
-    <!-- planning fsm -->
+    <!-- FSM 导航模式与重规划触发距离（m）：机器人距当前局部轨迹起点超过 thresh_replan 时考虑重规划；目标已很近时由 thresh_no_replan 抑制重规划。 -->
     <param name="fsm/navi_mode" value="$(arg navi_mode)" type="int"/>
     <!-- 重新规划阈值 -->
     <param name="fsm/thresh_replan" value="1.0" type="double"/>
-    <!-- 无重新规划阈值 -->
+    <!-- 目标点距机器人小于该值（m）时不再启动普通重规划。 -->
     <param name="fsm/thresh_no_replan" value="0.1" type="double"/>
     <param name="fsm/planning_horizon" value="$(arg planning_horizon)" type="double"/>
+    <!-- 紧急轨迹的制动/避障时间窗口（s）；fail_safe 控制执行阶段的低速安全收尾逻辑。 -->
     <param name="fsm/emergency_time_" value="1.0" type="double"/>
     <param name="fsm/fail_safe" value="true" type="bool"/> 
+    <!-- SCAN 局部轨迹连续生成失败上限；成功生成后计数清零，达到上限后进入安全停止/失败处理。 -->
     <param name="fsm/max_replan_fail_count" value="10" type="int"/>
-    <!-- 新路线与当前运动方向大幅反向时，先沿现有局部轨迹缓停再重规划。 -->
+    <!-- 进度监测窗口（s）及最小有效进展（m）：窗口内位移或目标距离改善不足时判为停滞。 -->
+    <param name="fsm/progress_timeout_sec" value="8.0" type="double"/>
+    <param name="fsm/progress_min_distance" value="0.10" type="double"/>
+    <!-- 实际位姿与轨迹的允许跟踪误差（m）；超出可触发进度异常恢复。 -->
+    <param name="fsm/progress_tracking_error_tolerance" value="1.5" type="double"/>
+    <!-- 仅限制进度监测触发的局部重规划次数；不同于 max_replan_fail_count（局部规划生成连续失败次数）。 -->
+    <param name="fsm/max_progress_replan_attempts" value="2" type="int"/>
+    <!-- 到达有效执行终点的距离容差（m）；识别终点被障碍物缩短时使用的距离判定容差（m）。 -->
+    <param name="fsm/goal_reached_tolerance" value="0.5" type="double"/>
+    <param name="fsm/endpoint_truncation_tolerance" value="0.05" type="double"/>
+    <!-- 新路线与当前运动方向大幅反向时，先沿现有局部轨迹缓停再重规划。角度单位为度，速度为 m/s。 -->
     <param name="fsm/direction_change_brake_enabled" value="true" type="bool"/>
     <param name="fsm/direction_change_threshold_deg" value="120.0" type="double"/>
     <param name="fsm/direction_change_min_speed" value="0.1" type="double"/>
     <param name="fsm/direction_change_stop_speed" value="0.1" type="double"/>
+    <!-- 制动加速度占 max_acc 的比例；其余参数指定仿真/实机状态和参考路径订阅及预处理方式。 -->
     <param name="fsm/direction_change_brake_acc_ratio" value="0.5" type="double"/>
     <param name="fsm/is_real_world" value="$(arg is_real_world)" type="bool"/>
     <param name="fsm/reference_path_topic" value="$(arg reference_path_topic)" type="str"/>
@@ -61,41 +82,40 @@
     <param name="fsm/reference_path_simplify_tolerance" value="$(arg reference_path_simplify_tolerance)" type="double"/>
     <param name="fsm/reference_path_mode" value="$(arg reference_path_mode)" type="str"/>
 
-    <!-- 自适应前视：仅 REFERENCE_PATH + polyline_rolling_window 生效。 -->
+    <!-- 参考路径滚动跟随的自适应前视，仅 REFERENCE_PATH + polyline_rolling_window 生效；距离单位为 m。 -->
     <param name="fsm/adaptive_horizon_enabled" value="true" type="bool"/>
-    <!-- 自适应前视：最小前视距离 -->
+    <!-- 自适应前视距离上下限（m）。 -->
     <param name="fsm/adaptive_horizon_min" value="3.5" type="double"/>
-    <!-- 自适应前视：最大前视距离 -->
     <param name="fsm/adaptive_horizon_max" value="8.0" type="double"/>
-    <!-- 自适应前视：曲率增益 -->
+    <!-- 曲率和坡度变化对前视距离的无量纲调节增益；坡度按空间窗口（m）平滑。 -->
     <param name="fsm/adaptive_horizon_curvature_gain" value="2.0" type="double"/>
-    <!-- 自适应前视：平滑坡度变化率增益 -->
     <param name="fsm/adaptive_horizon_slope_gain" value="1.0" type="double"/>
-    <!-- 自适应前视：坡度平滑空间窗口（m） -->
     <param name="fsm/adaptive_horizon_slope_smoothing_window" value="0.8" type="double"/>
 
-    <!-- sliding map -->
+    <!-- 滑动局部地图：分辨率、地图长宽高及滑动触发距离均以 m 计。 -->
     <param name="grid_map/resolution" value="0.05" />
     <param name="grid_map/sliding_map_size_x" value="10.0" />
     <param name="grid_map/sliding_map_size_y" value="10.0" />
     <param name="grid_map/sliding_map_size_z" value="5.0" />
     <param name="grid_map/map_sliding_thresh" value="0.2"/>
+    <!-- 双圆柱机体足迹模型的半径和前后采样偏移（m）。 -->
     <param name="grid_map/double_cylinder_radius" value="0.25" />
     <param name="grid_map/double_cylinder_offset" value="0.18" />
-    <!-- 向上膨胀 -->
+    <!-- 障碍物垂直膨胀量（m）；分别控制向上和向下扩张。 -->
     <param name="grid_map/obstacles_inflation_z_up" value="0.0" />  
     <param name="grid_map/obstacles_inflation_z_down" value="0.0" />
     <param name="grid_map/body_height" value="$(arg body_height)" />
 
-    <!-- Optional PCT tomogram constraint for terrain-aware planning. -->
+    <!-- 可选地形约束：SCAN 足迹支撑检查与 PCT 地形代价图约束可分别启用。 -->
     <param name="terrain_check/use_scan_support" value="$(arg use_scan_support)" type="bool" />
     <param name="terrain_check/use_pct_traversability" value="$(arg use_pct_traversability)" type="bool" />
     <param name="pct_traversability/topic" value="$(arg pct_terrain_map_topic)" type="str" />
+    <!-- PCT 可通行代价阈值及允许的地形高度误差（m）；调试开关输出被拒绝原因统计。 -->
     <param name="pct_traversability/cost_threshold" value="60" type="double" />
     <param name="pct_traversability/max_height_error" value="0.40" type="double" />
-    <param name="pct_traversability/debug_rejection_stats" value="true" type="bool" />
+    <param name="pct_traversability/debug_rejection_stats" value="false" type="bool" />
 
-    <!-- 地面支撑约束：SCAN 显式启用，其他机器人可在各自配置中关闭或替换足迹。 -->
+    <!-- 地面支撑约束：support_model 可选 double_cylinder（机体前后及横向采样）或 center（中心点）；高度/落差阈值单位为 m。 -->
     <param name="grid_map/traversability_enabled" value="false" />
     <param name="grid_map/support_model" value="double_cylinder" />
     <param name="grid_map/support_body_height" value="$(arg body_height)" />
@@ -104,50 +124,53 @@
     <param name="grid_map/support_max_height_difference" value="0.35" />
     <param name="grid_map/frame_id" value="$(arg navigation_frame)" type="str"/>
 
-    <!-- depth camera intrinsics -->
+    <!-- 深度相机内参：cx/cy 为主点像素位置，fx/fy 为像素单位焦距。 -->
     <param name="grid_map/cx" value="$(arg cx)"/>
     <param name="grid_map/cy" value="$(arg cy)"/>
     <param name="grid_map/fx" value="$(arg fx)"/>
     <param name="grid_map/fy" value="$(arg fy)"/>
 
-    <!-- depth -->
+    <!-- 深度过滤范围（m）、图像边缘剔除像素数、深度单位缩放系数及像素抽样步长。 -->
     <param name="grid_map/depth_filter_maxdist"   value="3.0"/>
     <param name="grid_map/depth_filter_mindist"   value="0.3"/>
     <param name="grid_map/depth_filter_margin"    value="1"/>
     <param name="grid_map/k_depth_scaling_factor" value="1000.0"/>
     <param name="grid_map/skip_pixel" value="2"/>
 
-    <!-- local fusion -->
+    <!-- 占据栅格局部融合：p_hit/p_miss 为命中/未命中更新概率，p_min/p_max 为概率夹紧范围，p_occ 为占据判定阈值。 -->
     <param name="grid_map/p_hit" value="0.85"/>
     <param name="grid_map/p_miss" value="0.30"/>
     <param name="grid_map/p_min" value="0.12"/>
     <param name="grid_map/p_max" value="0.98"/>
     <param name="grid_map/p_occ" value="0.80"/>
+    <!-- 射线积分最大距离（m）；vis_height 限制可视化未知点的高度范围（m）。 -->
     <param name="grid_map/max_ray_length" value="5.0"/>
     <param name="grid_map/vis_height" value="0.3" type="double"/>
 
-    <!-- planner manager -->
+    <!-- 局部规划器管理器：速度、加速度、加加速度上限分别为 m/s、m/s²、m/s³；控制点间距和前视距离为 m。 -->
     <param name="manager/max_vel" value="$(arg max_vel)" type="double"/>
     <param name="manager/max_acc" value="$(arg max_acc)" type="double"/>
     <param name="manager/max_jerk" value="4" type="double"/>
     <param name="manager/control_points_distance" value="0.2" type="double"/>
+    <!-- 可行性检查容差系数，用于放宽离散轨迹动力学约束检查。 -->
     <param name="manager/feasibility_tolerance" value="0.5" type="double"/>
     <param name="manager/planning_horizon" value="$(arg planning_horizon)" type="double"/>
 
-    <!-- trajectory optimization -->
+    <!-- 轨迹优化：lambda_* 为平滑、避障、可行性和参考适配项权重；dist0 为避障距离尺度（m）。 -->
     <param name="optimization/lambda_smooth" value="1.0" type="double"/>
     <param name="optimization/lambda_collision" value="1.0" type="double"/>
     <param name="optimization/lambda_feasibility" value="0.1" type="double"/>
     <param name="optimization/lambda_fitness" value="1.0" type="double"/>
     <param name="optimization/dist0" value="0.2" type="double"/>
     <param name="optimization/max_vel" value="$(arg max_vel)" type="double"/>
+    <!-- 速度/加速度软约束容差，单位分别为 m/s 和 m/s²。 -->
     <param name="optimization/vel_tolerance" value="1.0" type="double"/>
     <param name="optimization/max_acc" value="$(arg max_acc)" type="double"/>
     <param name="optimization/acc_tolerance" value="1.0" type="double"/>
 
   </node>
 
-  <!-- trajectory tracking -->
+  <!-- 闭环轨迹跟踪控制器：前视时间（s）、航向误差阈值（rad）、速度上限（m/s）及到达容差（m/rad）；kp_pos/kp_yaw 为位置/航向反馈增益。 -->
   <param name="closed_loop_controller/time_forward" value="0.8" type="double"/>
   <param name="closed_loop_controller/heading_error_threshold" value="0.8" type="double"/>
   <param name="closed_loop_controller/kp_pos" value="0.8" type="double"/>
@@ -158,11 +181,13 @@
   <param name="closed_loop_controller/finish_dist" value="0.15" type="double"/>
   <param name="closed_loop_controller/finish_yaw_tolerance" value="0.15" type="double"/>
 
+  <!-- MPC 控制器：前视时间（s）、航向阈值（rad）和线/角速度上限（m/s、rad/s）。 -->
   <param name="mpc_controller/time_forward" value="0.8" type="double"/>
   <param name="mpc_controller/heading_error_threshold" value="0.8" type="double"/>
   <param name="mpc_controller/max_vx" value="$(arg max_vel)" type="double"/>
   <param name="mpc_controller/max_vy" value="0.35" type="double"/>
   <param name="mpc_controller/max_vyaw" value="1.0" type="double"/>
+  <!-- q_* 为状态误差代价权重，r_* 为控制量及其变化率代价权重；迭代次数、求解超时（s）限制单次优化开销。 -->
   <param name="mpc_controller/q_pos" value="8.0" type="double"/>
   <param name="mpc_controller/q_yaw" value="1.5" type="double"/>
   <param name="mpc_controller/r_velocity" value="0.08" type="double"/>

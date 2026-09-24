@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
   interactive_markers
   nav_msgs
   global_pct_planner
+  navigation_supervisor
   motion_planner_log
   rospy
   std_msgs
@@ -18,7 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   visualization_msgs
 )
 
-catkin_package(CATKIN_DEPENDS motion_planner_log global_pct_planner)
+catkin_package(CATKIN_DEPENDS motion_planner_log global_pct_planner navigation_supervisor)
 
 if(CATKIN_ENABLE_TESTING)
   ######################
@@ -31,7 +32,6 @@ endif()
 ## 安装规则 ##
 #############
 catkin_install_python(PROGRAMS
-  scripts/navigation_manager.py
   scripts/goal_interactive_marker.py
   scripts/replan_cycle_budget.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -39,7 +39,3 @@ catkin_install_python(PROGRAMS
 
 install(DIRECTORY launch/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch)
-install(DIRECTORY config/
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
-  PATTERN "__pycache__" EXCLUDE
-  PATTERN "*.pyc" EXCLUDE)

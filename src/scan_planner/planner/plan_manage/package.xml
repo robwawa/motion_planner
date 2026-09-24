@@ -7,6 +7,7 @@
   <license>TODO</license>
 
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>actionlib</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
   <build_depend>roslib</build_depend>
@@ -23,8 +24,10 @@
   <build_depend>message_generation</build_depend>
   <build_depend>motion_planner_log</build_depend>
   <build_depend>global_pct_planner</build_depend>
+  <build_depend>navigation_msgs</build_depend>
 
   <run_depend>roscpp</run_depend>
+  <run_depend>actionlib</run_depend>
   <run_depend>rospy</run_depend>
   <run_depend>roslib</run_depend>
   <run_depend>std_msgs</run_depend>
@@ -40,6 +43,7 @@
   <run_depend>message_runtime</run_depend>
   <run_depend>motion_planner_log</run_depend>
   <run_depend>global_pct_planner</run_depend>
+  <run_depend>navigation_msgs</run_depend>
   <run_depend>go2_description</run_depend>
 
   <test_depend>gtest</test_depend>

@@ -142,7 +142,7 @@ void simCallback(const ros::TimerEvent &)
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "go2_kinematic_sim");
-  motion_planner_log::initialize("go2_kinematic_sim", argv[0]);
+  motion_planner_log::initialize("scan_planner", "go2_kinematic_sim", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: Go2 kinematic simulator.");
   ros::NodeHandle node;
   ros::NodeHandle nh("~");

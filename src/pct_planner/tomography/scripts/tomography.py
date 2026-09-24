@@ -301,7 +301,7 @@ if __name__ == '__main__':
     cfg = Config()
 
     rospy.init_node('pointcloud_tomography')
-    logger = configure('pointcloud_tomography')
+    logger = configure('pct_planner', 'pointcloud_tomography')
     profile = load_public_profile()
     logger.info('PCT traversability: kernel=%d slope=%.3f step=%.3f barrier=%.3f threshold=%.3f',
                   profile.trav.kernel_size, profile.trav.slope_max,

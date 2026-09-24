@@ -18,6 +18,8 @@
   <run_depend>gazebo_ros</run_depend>
   <build_depend>global_pct_planner</build_depend>
   <run_depend>global_pct_planner</run_depend>
+  <build_depend>navigation_supervisor</build_depend>
+  <run_depend>navigation_supervisor</run_depend>
   <build_depend>gazebo_msgs</build_depend>
   <run_depend>gazebo_msgs</run_depend>
   <build_depend>geometry_msgs</build_depend>

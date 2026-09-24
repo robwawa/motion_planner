@@ -121,7 +121,8 @@ PCT CPU 节点使用 ROS Noetic 的系统 Python；`CONDA_ENV_PATH` 仅供强化
 ## PCT + SCAN 分层导航 Demo
 
 首期集成使用同一份 Building PCD：PCT 通过 `/pct/plan_path` Action 生成全局多层路径，
-`navigation_manager` 将其校验、抽稀后发布到 SCAN 的
+`navigation_supervisor` 在行为树中校验、裁剪后通过
+`/scan/follow_reference_path` Action 交给 SCAN；处理后的路径可视化话题为
 `/navigation/reference_path`。所有路径均以 `map` 为坐标系；路径 Z 的语义由
 `reference_path_z_mode` 指定（默认 `base`）。
 

@@ -194,7 +194,7 @@ rostopic pub -1 /goal_pose_3d geometry_msgs/PoseStamped \
   '{header: {frame_id: map}, pose: {position: {x: -6.0, y: -1.0, z: 4.9}, orientation: {w: 1.0}}}'
 ```
 
-集成 launch 让 PCT 和 SCAN 共用同一 PCD 与 `map` 坐标系：`navigation_manager.py` 订阅目标和机身里程计，调用 `/pct/plan_path`，验证/抽稀路径后发布 `/navigation/reference_path`；SCAN 的 `navi_mode=3` 接收该路径并做局部 B-spline 避障。`goal_interactive_marker.py` 提供 RViz 交互式三维目标和 Plan 菜单。
+集成 launch 让 PCT 和 SCAN 共用同一 PCD 与 `map` 坐标系：`navigation_supervisor_node` 通过 C++ 行为树完成目标校验、TF 转换、PCT 调用、ReferencePathProcessor 路径处理及 SCAN Action 调度；SCAN 的 `navi_mode=3` 接收 `/scan/follow_reference_path` 并做局部 B-spline 避障。`goal_interactive_marker.py` 提供 RViz 交互式三维目标和 Plan 菜单。
 
 ## 架构与关键数据流
 
@@ -208,12 +208,12 @@ PCT 数组契约很重要：C-order 布局为 `[layer][row][col]`，`row` 对应
 
 ### PCT/SCAN 集成链路
 
-`pct_scan_navigation` 不负责重新规划算法，只负责接口编排：
+`pct_scan_navigation` 不负责重新规划算法或路径后处理，只负责接口编排：
 
 - 将 RViz 2D goal 提升为带当前机身 Z 的 3D goal，并用 TF 转到 `navigation_frame`；
 - 用 odometry 作为起点调用 PCT Action；
-- 拒绝 frame 错误、无效路径、路径离机身过远等结果；
-- 把路径裁剪到机器人最近点并发布给 SCAN；
+- 将已转换到 `navigation_frame` 的起点和目标发送给 PCT；
+- 接收 PCT 的 Action 结果，并由 `global_pct_planner` 直接发布合法路径给 SCAN；
 - 将 PCT snapped goal 发布到 `/navigation/validated_goal`，将状态发布到 `/navigation/status`。
 
 ### SCAN 局部规划链路
@@ -237,7 +237,7 @@ PCT 数组契约很重要：C-order 布局为 `[layer][row][col]`，`row` 对应
 ## 主要入口文件
 
 - 全局规划：`src/pct_planner/scripts/pct_planner_node.py`、`src/pct_planner/tomography/scripts/tomography.py`、`src/pct_planner/planner/scripts/planner_wrapper.py`
-- 集成：`src/pct_scan_navigation/scripts/navigation_manager.py`
+- 集成：`src/navigation_supervisor/src/navigation_supervisor_node.cpp`、`src/navigation_supervisor/config/navigation_tree.xml`
 - SCAN FSM/局部规划：`src/scan_planner/planner/plan_manage/src/scan_replan_fsm.cpp`、`planner_manager.cpp`
 - 地图占用与 PCT 约束：`src/scan_planner/planner/plan_env/src/grid_map.cpp`、`pct_terrain_map.cpp`
 - 默认参数/启动：`src/scan_planner/planner/plan_manage/launch/run.launch`、`advanced_param.xml`、`simulator.xml`，以及 `src/pct_scan_navigation/launch/pct_scan_demo.launch`

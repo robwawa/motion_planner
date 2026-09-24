@@ -28,7 +28,7 @@ namespace gazebo
                 ros::init(argc, argv, "gazebo_foot_contact",
                           ros::init_options::NoSigintHandler | ros::init_options::AnonymousName);
             }
-            motion_planner_log::initialize("pct_scan_gazebo_foot_contact");
+            motion_planner_log::initialize("pct_scan_gazebo", "pct_scan_gazebo_foot_contact", nullptr);
             this->parentSensor = std::dynamic_pointer_cast<sensors::ContactSensor>(_sensor); // Make sure the parent sensor is valid.
             if (!this->parentSensor){
                 gzerr << "UnitreeFootContactPlugin requires a ContactSensor.\n";

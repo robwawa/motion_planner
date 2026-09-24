@@ -626,7 +626,7 @@ Visualization Manager:
       Length: 0.3
       Line Style: Billboards
       Line Width: 0.05
-      Name: pct_global_path
+      Name: navigation_reference_path
       Offset:
         X: 0
         Y: 0
@@ -637,7 +637,7 @@ Visualization Manager:
       Radius: 0.03
       Shaft Diameter: 0.1
       Shaft Length: 0.1
-      Topic: /pct/global_path
+      Topic: /navigation/reference_path
       Unreliable: false
       Value: true
     - Alpha: 1
@@ -662,30 +662,6 @@ Visualization Manager:
       Shaft Diameter: 0.05
       Shaft Length: 0.05
       Topic: /planning/global_reference_path
-      Unreliable: false
-      Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz/Path
-      Color: 0; 255; 255
-      Enabled: true
-      Head Diameter: 0.2
-      Head Length: 0.15
-      Length: 0.2
-      Line Style: Lines
-      Line Width: 0.04
-      Name: navigation_reference_path
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 0; 255; 255
-      Pose Style: None
-      Queue Size: 10
-      Radius: 0.02
-      Shaft Diameter: 0.05
-      Shaft Length: 0.05
-      Topic: /navigation/reference_path
       Unreliable: false
       Value: true
     # PCT layer diagnostics (disabled by default; enable individual layers when

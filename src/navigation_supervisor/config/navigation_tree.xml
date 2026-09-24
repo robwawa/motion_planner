@@ -1,0 +1,25 @@
+<root main_tree_to_execute="NavigateToPose">
+  <BehaviorTree ID="NavigateToPose">
+    <Sequence name="Mission">
+      <ValidateGoal />
+      <NavigationRecovery>
+        <Sequence name="NavigateWithReplanning">
+          <TransformGoal />
+          <CheckRobotPose />
+          <ComputePCTPath />
+          <Fallback name="AlreadyAtGoalOrExecute">
+            <CheckGoalReached />
+            <Sequence name="ProcessAndFollow">
+              <ProcessReferencePath />
+              <ValidateReferencePath />
+              <FollowReferencePath />
+              <MonitorProgress />
+              <CheckGoalReached />
+            </Sequence>
+          </Fallback>
+        </Sequence>
+        <RecoveryDispatcher />
+      </NavigationRecovery>
+    </Sequence>
+  </BehaviorTree>
+</root>

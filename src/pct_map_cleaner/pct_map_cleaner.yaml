@@ -6,10 +6,10 @@
 
 # 输入 LIO-SAM 最终地图的 PCD 文件路径。
 # 支持绝对路径和相对路径；命令行 --input 的优先级高于此参数。
-input_pcd: "../global_pct_planner/rsc/pcd/plaza3_10.pcd"
+input_pcd: "../global_pct_planner/rsc/pcd/building2_9.pcd"
 # 清洗后 PCD 地图的保存路径。
 # 支持绝对路径和相对路径；命令行 --output 的优先级高于此参数。
-output_pcd: "../global_pct_planner/rsc/pcd/plaza3_10_clean0.pcd"
+output_pcd: "../global_pct_planner/rsc/pcd/building2_9_clean03.pcd"
 
 
 sor:

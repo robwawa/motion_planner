@@ -40,7 +40,7 @@ def pct_plan():
 
 if __name__ == '__main__':
     rospy.init_node("pct_planner", anonymous=True)
-    logger = configure("pct_planner_plan")
+    logger = configure("pct_planner", "pct_planner_plan")
 
     pct_plan()
 

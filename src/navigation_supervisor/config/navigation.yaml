@@ -1,0 +1,56 @@
+# 导航坐标系与话题配置
+# 全局导航、目标转换和参考路径使用的坐标系。
+navigation_frame: map
+# 机器人位姿/里程计输入话题。
+body_pose_topic: /quad_0/body_pose
+# 普通三维导航目标输入话题。
+goal_topic: /goal_pose_3d
+# RViz “2D Nav Goal”发布的目标话题。
+rviz_goal_topic: /move_base_simple/goal
+# 经过坐标转换和校验后的目标发布话题。
+validated_goal_topic: /navigation/validated_goal
+# 处理后的参考路径发布话题。
+reference_path_topic: /navigation/reference_path
+# 导航状态发布话题。
+status_topic: /navigation/status
+
+# Action 接口配置
+# 全局 PCT 路径规划 Action 名称。
+# 注意：当前代码中该 Action 客户端地址固定为 /pct/plan_path，修改此参数不会改变实际连接目标。
+pct_action: /pct/plan_path
+# SCAN 参考路径执行 Action 名称。
+# 注意：当前代码中该 Action 客户端地址固定为 /scan/follow_reference_path，修改此参数不会改变实际连接目标。
+scan_action: /scan/follow_reference_path
+
+# Action 超时配置（单位：秒）
+# 等待 PCT/SCAN Action Server 在线的最长时间；超时后认为 Action 不可用。
+action_wait_timeout: 15.0
+# 单次路径规划或参考路径执行的最长时间；超时后取消当前 Action 并结束本次导航任务。
+action_execution_timeout: 300.0
+# SCAN feedback must stay fresh while executing; set to 0 to disable this check.
+follow_feedback_timeout_sec: 3.0
+# Whole-task wall-clock deadline. Set to 0 to disable.
+mission_deadline_sec: 900.0
+
+# 路径与目标判定配置（距离单位：米）
+# 机器人与目标点的距离不超过该值时，判定导航到达。
+goal_reached_distance: 0.5
+# 机器人当前位置与全局路径最近点允许的最大距离；超过该值则拒绝该路径。
+max_start_distance: 1.0
+
+# 恢复与重规划配置
+# 一次任务实际发送给 PCT 的请求上限，包含首次规划；等待和局部恢复不占用此预算。
+global_replan_max_cycles: 3
+# 紧急碰撞恢复后，在重新进行全局规划前等待的时间（单位：秒）。
+emergency_recovery_wait_sec: 2.0
+# 环境不可用时单次等待上限与总重试次数；不占用全局规划预算。
+environment_wait_timeout_sec: 30.0
+max_environment_wait_retries: 3
+# SCAN 局部恢复/紧急恢复预算，与 PCT 全局规划预算分离。
+emergency_recovery_max_attempts: 2
+# 动态障碍触发恢复时，要求新感知快照到达的最长等待时间。
+dynamic_update_timeout_sec: 5.0
+require_dynamic_update_after_recovery: true
+dynamic_layer_ok_topic: /pct/dynamic_layer_ok
+dynamic_layer_enabled_topic: /pct/dynamic_layer_enabled
+dynamic_version_topic: /pct/dynamic_version

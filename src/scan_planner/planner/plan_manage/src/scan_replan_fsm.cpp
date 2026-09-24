@@ -118,8 +118,41 @@ namespace scan_planner
     go2_execution_frozen_ = false;
     flag_escape_emergency_ = true;
     need_hover_stop_ = false;
-    global_replan_after_local_failure_ = false;
+    odom_pos_.setZero();
+    odom_vel_.setZero();
+    odom_acc_.setZero();
+    odom_orient_.setIdentity();
+    end_pt_.setZero();
+    requested_route_goal_.setZero();
+    progress_anchor_position_.setZero();
+    progress_anchor_remaining_distance_ = 0.0;
+    emergency_stop_result_pending_ = false;
+    emergency_stop_reason_.clear();
     replan_fail_count_ = 0;
+    progress_replan_attempts_ = 0;
+    progress_watchdog_initialized_ = false;
+    tracking_error_initialized_ = false;
+    active_route_endpoint_truncated_ = false;
+    pending_route_ = nav_msgs::Path();
+    pending_route_mission_id_ = 0;
+    pending_route_id_ = 0;
+    pending_route_request_id_ = 0;
+    pending_route_planning_attempt_ = 0;
+    pending_route_trigger_.clear();
+    pending_route_trigger_reason_.clear();
+    pending_route_generation_ = 0;
+    pending_route_ready_ = false;
+    pending_follow_generation_ = 0;
+    route_generation_ = 0;
+    active_execution_mission_id_ = 0;
+    active_execution_route_id_ = 0;
+    active_execution_request_id_ = 0;
+    active_execution_planning_attempt_ = 0;
+    active_execution_trigger_.clear();
+    active_execution_trigger_reason_.clear();
+    active_execution_generation_ = 0;
+    cancel_request_mission_id_ = 0;
+    cancel_request_route_id_ = 0;
     last_freeze_update_time_ = ros::Time::now();
 
     /*  fsm param  */
@@ -152,6 +185,13 @@ namespace scan_planner
     nh.param("fsm/direction_change_min_speed", direction_change_min_speed_, 0.1);
     nh.param("fsm/direction_change_stop_speed", direction_change_stop_speed_, 0.1);
     nh.param("fsm/direction_change_brake_acc_ratio", direction_change_brake_acc_ratio_, 0.5);
+    nh.param("fsm/progress_timeout_sec", progress_timeout_sec_, 8.0);
+    nh.param("fsm/progress_min_distance", progress_min_distance_, 0.10);
+    nh.param("fsm/progress_tracking_error_tolerance",
+             progress_tracking_error_tolerance_, 1.5);
+    nh.param("fsm/max_progress_replan_attempts", max_progress_replan_attempts_, 2);
+    nh.param("fsm/goal_reached_tolerance", goal_reached_tolerance_, 0.5);
+    nh.param("fsm/endpoint_truncation_tolerance", endpoint_truncation_tolerance_, 0.05);
     nh.param("grid_map/frame_id", self_inflation_frame_id_, std::string("world"));
 
     if (reference_path_z_mode_ != "base" && reference_path_z_mode_ != "ground")
@@ -188,6 +228,15 @@ namespace scan_planner
         direction_change_brake_acc_ratio_ <= 0.0 || direction_change_brake_acc_ratio_ > 1.0)
     {
       MOTION_PLANNER_LOG_ERROR("Invalid direction-change brake parameters.");
+      ros::shutdown();
+      return;
+    }
+    if (progress_timeout_sec_ <= 0.0 || progress_min_distance_ <= 0.0 ||
+        progress_tracking_error_tolerance_ <= 0.0 ||
+        max_progress_replan_attempts_ < 0 || goal_reached_tolerance_ <= 0.0 ||
+        endpoint_truncation_tolerance_ < 0.0)
+    {
+      MOTION_PLANNER_LOG_ERROR("Invalid progress watchdog or endpoint parameters.");
       ros::shutdown();
       return;
     }
@@ -236,10 +285,6 @@ namespace scan_planner
     go2_execution_frozen_sub_ = nh.subscribe("/planning/go2_execution_frozen", 10, &SCANReplanFSM::go2ExecutionFrozenCallback, this);
 
     bspline_pub_ = nh.advertise<scan_planner::Bspline>("/planning/bspline", 10);
-    // This is an edge event, not a persistent blockage state.  It is emitted
-    // only after SCAN has exhausted its own local replanning budget and the
-    // robot has completed the emergency stop.
-    replan_pub_ = nh.advertise<std_msgs::Empty>("/scan/global_replan_request", 1, false);
     data_disp_pub_ = nh.advertise<scan_planner::DataDisp>("/planning/data_display", 100);
     self_inflation_pub_ = nh.advertise<visualization_msgs::Marker>("self_inflation", 10, true);
     global_reference_path_pub_ = nh.advertise<nav_msgs::Path>("/planning/global_reference_path", 1, true);
@@ -258,13 +303,18 @@ namespace scan_planner
       planGlobalTrajbyGivenWps();
     }
     else if (navi_mode_ == NAVI_MODE::REFERENCE_PATH)
-      path_sub_ = nh.subscribe(reference_path_topic_, 1, &SCANReplanFSM::pathCallback, this);
+    {
+      // Reference paths are submitted through FollowReferencePath.action.
+      // Do not subscribe to a second latched path topic: the action is the
+      // single owner of route acceptance and cancellation in BT mode.
+    }
     else
       MOTION_PLANNER_LOG_ERROR("Unsupported navigation mode: %d", navi_mode_);
 
-    MOTION_PLANNER_LOG_INFO("FSM ready: navigation_mode=%d frame=%s reference_path_topic=%s replan_threshold=%.3f emergency_time=%.3f fail_safe=%s",
+    follow_action_server_.start();
+    MOTION_PLANNER_LOG_INFO("FSM ready: navigation_mode=%d frame=%s follow_action=/scan/follow_reference_path replan_threshold=%.3f emergency_time=%.3f fail_safe=%s",
                             navi_mode_, self_inflation_frame_id_.c_str(),
-                            reference_path_topic_.c_str(), replan_thresh_, emergency_time_,
+                            replan_thresh_, emergency_time_,
                             enable_fail_safe_ ? "enabled" : "disabled");
   }
 
@@ -529,6 +579,120 @@ namespace scan_planner
            reference_path_mode_ == "polyline_rolling_window";
   }
 
+  void SCANReplanFSM::setFollowState(const std::string &state)
+  {
+    std::lock_guard<std::mutex> lock(follow_mutex_);
+    follow_state_ = state;
+  }
+
+  void SCANReplanFSM::scheduleRouteExecution()
+  {
+    switch (exec_state_)
+    {
+    case INIT:
+      // acceptReferencePath() requires odometry, so the route can safely wait
+      // in WAIT_TARGET for the normal INIT -> WAIT_TARGET transition.
+      changeFSMExecState(WAIT_TARGET, "NEW_ROUTE");
+      setFollowState("READY_FOR_NEW_ROUTE");
+      break;
+    case WAIT_TARGET:
+      changeFSMExecState(GEN_NEW_TRAJ, "NEW_ROUTE");
+      setFollowState("GEN_NEW_TRAJ");
+      break;
+    case EXEC_TRAJ:
+      if (!startDirectionChangeBrake() && exec_state_ == EXEC_TRAJ)
+      {
+        changeFSMExecState(REPLAN_TRAJ, "NEW_ROUTE");
+        setFollowState("REPLAN_TRAJ");
+      }
+      else if (exec_state_ == BRAKE_FOR_NEW_TARGET)
+      {
+        setFollowState("BRAKE_FOR_NEW_TARGET");
+      }
+      break;
+    case GEN_NEW_TRAJ:
+      // Keep the FSM in the generation branch, but make the generation token
+      // visible to the action client and invalidate any older result.
+      changeFSMExecState(GEN_NEW_TRAJ, "NEW_ROUTE");
+      setFollowState("GEN_NEW_TRAJ");
+      break;
+    case REPLAN_TRAJ:
+      // A newly received route must not be completed using the previous
+      // global trajectory. Start a fresh local trajectory from the latest
+      // route instead.
+      changeFSMExecState(GEN_NEW_TRAJ, "NEW_ROUTE");
+      setFollowState("GEN_NEW_TRAJ");
+      break;
+    case BRAKE_FOR_NEW_TARGET:
+      // The route remains pending until the braking trajectory has stopped.
+      setFollowState("BRAKE_FOR_NEW_TARGET");
+      break;
+    case EMERGENCY_STOP:
+      // Emergency-stop completion owns the transition to GEN_NEW_TRAJ.
+      setFollowState("EMERGENCY_STOPPING");
+      break;
+    }
+  }
+
+  bool SCANReplanFSM::activatePendingRoute(std::string &error)
+  {
+    if (!pending_route_ready_)
+    {
+      error = "no_pending_route";
+      return false;
+    }
+
+    const nav_msgs::Path route = pending_route_;
+    const uint64_t mission_id = pending_route_mission_id_;
+    const uint64_t route_id = pending_route_id_;
+    const uint64_t request_id = pending_route_request_id_;
+    const uint32_t planning_attempt = pending_route_planning_attempt_;
+    const std::string trigger = pending_route_trigger_;
+    const std::string trigger_reason = pending_route_trigger_reason_;
+    const uint64_t generation = pending_route_generation_;
+
+    if (!acceptReferencePath(route, error))
+    {
+      pending_route_ready_ = false;
+      finishFollowAction(navigation_msgs::FollowReferencePathResult::REJECTED,
+                         error, mission_id, route_id, 0, "invalid_route");
+      return false;
+    }
+
+    pending_route_ = nav_msgs::Path();
+    pending_route_ready_ = false;
+    {
+      std::lock_guard<std::mutex> lock(follow_mutex_);
+      active_execution_mission_id_ = mission_id;
+      active_execution_route_id_ = route_id;
+      active_execution_request_id_ = request_id;
+      active_execution_planning_attempt_ = planning_attempt;
+      active_execution_trigger_ = trigger;
+      active_execution_trigger_reason_ = trigger_reason;
+      active_execution_generation_ = generation;
+    }
+    replan_fail_count_ = 0;
+    progress_replan_attempts_ = 0;
+    progress_watchdog_initialized_ = false;
+    tracking_error_initialized_ = false;
+    active_route_endpoint_truncated_ =
+        (requested_route_goal_ - end_pt_).norm() > endpoint_truncation_tolerance_;
+    emergency_stop_reason_.clear();
+
+    setFollowState("ROUTE_ACCEPTED");
+    scheduleRouteExecution();
+    MOTION_PLANNER_LOG_INFO(
+        "event=local_execution_started mission_id=%llu route_id=%llu "
+        "request_id=%llu planning_attempt=%u trigger=%s trigger_reason=%s "
+        "generation=%llu",
+        static_cast<unsigned long long>(mission_id),
+        static_cast<unsigned long long>(route_id),
+        static_cast<unsigned long long>(request_id), planning_attempt,
+        trigger.c_str(), trigger_reason.c_str(),
+        static_cast<unsigned long long>(generation));
+    return true;
+  }
+
   double SCANReplanFSM::projectReferencePathProgress(const Eigen::Vector3d &point,
                                                       const double min_progress,
                                                       const double max_progress) const
@@ -579,24 +743,49 @@ namespace scan_planner
 
   void SCANReplanFSM::pathCallback(const nav_msgs::PathConstPtr &msg)
   {
-    if (!msg || msg->poses.empty())
-    {
-      MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "Received empty /initial_path, ignore.");
+    if (!msg)
       return;
+    std::string error;
+    if (!acceptReferencePath(*msg, error))
+      MOTION_PLANNER_LOG_WARN("Reference path rejected: %s", error.c_str());
+    else
+      scheduleRouteExecution();
+  }
+
+  bool SCANReplanFSM::acceptReferencePath(const nav_msgs::Path &msg,
+                                          std::string &error)
+  {
+    error.clear();
+    if (msg.header.frame_id.empty() || msg.poses.size() < 2)
+    {
+      error = "invalid_reference_path";
+      return false;
+    }
+
+    for (const auto &pose_stamped : msg.poses)
+    {
+      const auto &position = pose_stamped.pose.position;
+      if (!std::isfinite(position.x) || !std::isfinite(position.y) ||
+          !std::isfinite(position.z))
+      {
+        error = "non_finite_reference_path";
+        return false;
+      }
     }
 
     if (!have_odom_)
     {
-      MOTION_PLANNER_LOG_WARN_THROTTLE(1.0, "No odometry yet, cannot plan global trajectory.");
-      return;
+      error = "odometry_unavailable";
+      return false;
     }
 
     trigger_ = true;
     const double z_offset = reference_path_z_mode_ == "ground" ? body_height_ : 0.0;
-    end_pt_ << msg->poses.back().pose.position.x,
-        msg->poses.back().pose.position.y,
-        msg->poses.back().pose.position.z + z_offset;
-    const auto &final_orientation = msg->poses.back().pose.orientation;
+    end_pt_ << msg.poses.back().pose.position.x,
+        msg.poses.back().pose.position.y,
+        msg.poses.back().pose.position.z + z_offset;
+    requested_route_goal_ = end_pt_;
+    const auto &final_orientation = msg.poses.back().pose.orientation;
     const double q_norm = std::sqrt(final_orientation.x * final_orientation.x +
                                     final_orientation.y * final_orientation.y +
                                     final_orientation.z * final_orientation.z +
@@ -606,9 +795,9 @@ namespace scan_planner
       final_yaw_ = tf::getYaw(final_orientation);
 
     std::vector<Eigen::Vector3d> raw_waypoints;
-    raw_waypoints.reserve(msg->poses.size());
+    raw_waypoints.reserve(msg.poses.size());
 
-    for (const auto &pose_stamped : msg->poses)
+    for (const auto &pose_stamped : msg.poses)
     {
       Eigen::Vector3d wp;
       wp(0) = pose_stamped.pose.position.x;
@@ -631,7 +820,7 @@ namespace scan_planner
       waypoints.insert(waypoints.begin(), odom_pos_);
 
     nav_msgs::Path downsampled_path;
-    downsampled_path.header = msg->header;
+    downsampled_path.header = msg.header;
     if (downsampled_path.header.frame_id.empty())
       downsampled_path.header.frame_id = self_inflation_frame_id_.empty() ? "world" : self_inflation_frame_id_;
     downsampled_path.header.stamp = ros::Time::now();
@@ -670,28 +859,261 @@ namespace scan_planner
     reference_path_z_progress_ = 0.0;
 
     MOTION_PLANNER_LOG_INFO("Reference path reduced from %zu poses to %zu trajectory waypoints.",
-             msg->poses.size(), waypoints.size());
+             msg.poses.size(), waypoints.size());
 
     bool success = planGlobalTrajByWaypoints(waypoints);
 
     if (success)
     {
       updatePendingTargetDirection(odom_pos_, waypoints);
-      /*** FSM ***/
-      if (exec_state_ == WAIT_TARGET)
-      {
-        changeFSMExecState(GEN_NEW_TRAJ, "TRIG");
-      }
-      else if (!startDirectionChangeBrake() && exec_state_ == EXEC_TRAJ)
-      {
-        changeFSMExecState(REPLAN_TRAJ, "TRIG");
-      }
-
+      // The caller decides when this newly planned route may become active.
+      // Keeping the state transition outside this function is important when
+      // a route arrives while SCAN is braking or emergency-stopping.
     }
     else
     {
+      error = "scan_global_trajectory_failed";
       MOTION_PLANNER_LOG_ERROR("Unable to generate global trajectory.");
+      return false;
     }
+    return true;
+  }
+
+  void SCANReplanFSM::followReferencePathExecute(
+      const navigation_msgs::FollowReferencePathGoalConstPtr &goal)
+  {
+    if (!goal)
+      return;
+
+    const bool invalid_id = goal->mission_id == 0 || goal->route_id == 0;
+    bool stale_id = false;
+    {
+      std::lock_guard<std::mutex> lock(follow_mutex_);
+      stale_id = have_last_goal_id_ &&
+                 (goal->mission_id < last_goal_mission_id_ ||
+                  (goal->mission_id == last_goal_mission_id_ &&
+                   goal->route_id <= last_goal_route_id_));
+      if (!invalid_id && !stale_id)
+      {
+        last_goal_mission_id_ = goal->mission_id;
+        last_goal_route_id_ = goal->route_id;
+        have_last_goal_id_ = true;
+      }
+    }
+    if (invalid_id || stale_id)
+    {
+      navigation_msgs::FollowReferencePathResult result;
+      result.result = navigation_msgs::FollowReferencePathResult::REJECTED;
+      result.message = invalid_id ? "invalid_mission_or_route_id" : "stale_route_id";
+      result.reason_code = invalid_id ? "invalid_route_id" : "stale_route_id";
+      follow_action_server_.setAborted(result, result.message);
+      return;
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(follow_mutex_);
+      pending_follow_goal_ = goal;
+      follow_request_pending_ = true;
+      follow_result_ready_ = false;
+      follow_cancel_requested_ = false;
+      cancel_request_mission_id_ = 0;
+      cancel_request_route_id_ = 0;
+      follow_result_code_ = navigation_msgs::FollowReferencePathResult::FAILED;
+      follow_result_message_.clear();
+      follow_result_reason_code_.clear();
+      follow_execution_goal_ = geometry_msgs::PoseStamped();
+      follow_final_pose_ = geometry_msgs::PoseStamped();
+      follow_result_remaining_distance_ = 0.0;
+      follow_result_endpoint_truncated_ = false;
+      active_mission_id_ = goal->mission_id;
+      active_route_id_ = goal->route_id;
+      // Invalidate an in-flight local planning call as soon as the Action
+      // goal is accepted. The FSM thread will consume the request later, but
+      // stale planning results must already be considered obsolete now.
+      pending_follow_generation_ = ++route_generation_;
+      follow_state_ = "WAITING_FOR_SCAN";
+      follow_distance_remaining_ = 0.0;
+    }
+
+    ros::Rate rate(50.0);
+    while (ros::ok())
+    {
+      bool ready = false;
+      uint8_t result_code = navigation_msgs::FollowReferencePathResult::FAILED;
+      std::string result_message;
+      std::string result_reason_code;
+      geometry_msgs::PoseStamped execution_goal;
+      geometry_msgs::PoseStamped final_pose;
+      double remaining_distance = 0.0;
+      bool endpoint_truncated = false;
+      {
+        std::lock_guard<std::mutex> lock(follow_mutex_);
+        ready = follow_result_ready_;
+        result_code = follow_result_code_;
+        result_message = follow_result_message_;
+        result_reason_code = follow_result_reason_code_;
+        execution_goal = follow_execution_goal_;
+        final_pose = follow_final_pose_;
+        remaining_distance = follow_result_remaining_distance_;
+        endpoint_truncated = follow_result_endpoint_truncated_;
+        if (!ready && follow_action_server_.isPreemptRequested() &&
+            !follow_cancel_requested_)
+        {
+          follow_cancel_requested_ = true;
+          cancel_request_mission_id_ = goal->mission_id;
+          cancel_request_route_id_ = goal->route_id;
+        }
+      }
+
+      if (ready)
+      {
+        navigation_msgs::FollowReferencePathResult result;
+        result.result = result_code;
+        result.message = result_message;
+        result.reason_code = result_reason_code;
+        result.execution_goal = execution_goal;
+        result.final_pose = final_pose;
+        result.remaining_distance = remaining_distance;
+        result.endpoint_truncated = endpoint_truncated;
+        if (result_code == navigation_msgs::FollowReferencePathResult::SUCCEEDED)
+          follow_action_server_.setSucceeded(result, result_message);
+        else if (result_code == navigation_msgs::FollowReferencePathResult::CANCELED)
+          follow_action_server_.setPreempted(result, result_message);
+        else
+          follow_action_server_.setAborted(result, result_message);
+        return;
+      }
+
+      navigation_msgs::FollowReferencePathFeedback feedback;
+      {
+        std::lock_guard<std::mutex> lock(follow_mutex_);
+        feedback.mission_id = active_mission_id_;
+        feedback.route_id = active_route_id_;
+        feedback.request_id = active_execution_request_id_;
+        feedback.planning_attempt = active_execution_planning_attempt_;
+        feedback.trigger = active_execution_trigger_;
+        feedback.trigger_reason = active_execution_trigger_reason_;
+        feedback.state = follow_state_;
+        feedback.distance_remaining = follow_distance_remaining_;
+      }
+      follow_action_server_.publishFeedback(feedback);
+      rate.sleep();
+    }
+  }
+
+  void SCANReplanFSM::processPendingFollowRequest()
+  {
+    navigation_msgs::FollowReferencePathGoalConstPtr goal;
+    uint64_t request_generation = 0;
+    {
+      std::lock_guard<std::mutex> lock(follow_mutex_);
+      if (!follow_request_pending_)
+        return;
+      goal = pending_follow_goal_;
+      request_generation = pending_follow_generation_;
+      follow_request_pending_ = false;
+      follow_state_ = "ACCEPTING_ROUTE";
+    }
+
+    if (!goal || navi_mode_ != NAVI_MODE::REFERENCE_PATH)
+    {
+      finishFollowAction(navigation_msgs::FollowReferencePathResult::REJECTED,
+                         "reference_path_mode_required",
+                         goal ? goal->mission_id : 0,
+                         goal ? goal->route_id : 0, 0,
+                         "reference_path_mode_required");
+      return;
+    }
+
+    // Only the FSM timer thread mutates planner data.  A route received while
+    // braking or emergency-stopping is retained until the stop completes;
+    // accepting it directly here would allow the stop branch to clear it.
+    pending_route_ = goal->path;
+    pending_route_mission_id_ = goal->mission_id;
+    pending_route_id_ = goal->route_id;
+    pending_route_request_id_ = goal->request_id;
+    pending_route_planning_attempt_ = goal->planning_attempt;
+    pending_route_trigger_ = goal->trigger;
+    pending_route_trigger_reason_ = goal->trigger_reason;
+    pending_route_generation_ = request_generation;
+    if (pending_route_generation_ == 0)
+      pending_route_generation_ = ++route_generation_;
+    pending_route_ready_ = true;
+    MOTION_PLANNER_LOG_INFO(
+        "Queued reference route: mission_id=%llu route_id=%llu generation=%llu "
+        "while FSM state=%d.",
+        static_cast<unsigned long long>(pending_route_mission_id_),
+        static_cast<unsigned long long>(pending_route_id_),
+        static_cast<unsigned long long>(pending_route_generation_),
+        static_cast<int>(exec_state_));
+
+    if (exec_state_ == EMERGENCY_STOP)
+    {
+      setFollowState("EMERGENCY_STOPPING");
+      return;
+    }
+    if (exec_state_ == BRAKE_FOR_NEW_TARGET)
+    {
+      setFollowState("BRAKE_FOR_NEW_TARGET");
+      return;
+    }
+
+    std::string error;
+    activatePendingRoute(error);
+  }
+
+  void SCANReplanFSM::finishFollowAction(uint8_t result,
+                                         const std::string &message,
+                                         uint64_t expected_mission_id,
+                                         uint64_t expected_route_id,
+                                         uint64_t expected_route_generation,
+                                         const std::string &reason_code)
+  {
+    geometry_msgs::PoseStamped execution_goal;
+    execution_goal.header.frame_id = self_inflation_frame_id_.empty()
+                                        ? "world"
+                                        : self_inflation_frame_id_;
+    execution_goal.header.stamp = ros::Time::now();
+    execution_goal.pose.position.x = end_pt_.x();
+    execution_goal.pose.position.y = end_pt_.y();
+    execution_goal.pose.position.z = end_pt_.z();
+    execution_goal.pose.orientation.w = 1.0;
+
+    geometry_msgs::PoseStamped final_pose;
+    final_pose.header = execution_goal.header;
+    final_pose.pose.position.x = odom_pos_.x();
+    final_pose.pose.position.y = odom_pos_.y();
+    final_pose.pose.position.z = odom_pos_.z();
+    final_pose.pose.orientation.x = odom_orient_.x();
+    final_pose.pose.orientation.y = odom_orient_.y();
+    final_pose.pose.orientation.z = odom_orient_.z();
+    final_pose.pose.orientation.w = odom_orient_.w();
+    const double remaining_distance = (end_pt_ - odom_pos_).norm();
+
+    std::lock_guard<std::mutex> lock(follow_mutex_);
+    if (expected_mission_id != 0 && active_mission_id_ != expected_mission_id)
+      return;
+    if (expected_route_id != 0 && active_route_id_ != expected_route_id)
+      return;
+    if (expected_route_generation != 0 &&
+        active_execution_generation_ != expected_route_generation)
+      return;
+    if (follow_result_ready_)
+      return;
+    follow_result_code_ = result;
+    follow_result_message_ = message;
+    follow_result_reason_code_ = reason_code.empty()
+                                     ? (result == navigation_msgs::FollowReferencePathResult::SUCCEEDED
+                                            ? "ok"
+                                            : "scan_execution_failed")
+                                     : reason_code;
+    follow_execution_goal_ = execution_goal;
+    follow_final_pose_ = final_pose;
+    follow_result_remaining_distance_ = remaining_distance;
+    follow_result_endpoint_truncated_ = active_route_endpoint_truncated_;
+    follow_result_ready_ = true;
+    follow_state_ = message;
+    follow_distance_remaining_ = remaining_distance;
   }
 
   void SCANReplanFSM::odometryCallback(const nav_msgs::OdometryConstPtr &msg)
@@ -916,7 +1338,52 @@ namespace scan_planner
 
   void SCANReplanFSM::execFSMCallback(const ros::TimerEvent &e)
   {
+    bool cancel_requested = false;
+    uint64_t cancel_mission_id = 0;
+    uint64_t cancel_route_id = 0;
+    uint64_t cancel_route_generation = 0;
+    {
+      std::lock_guard<std::mutex> lock(follow_mutex_);
+      cancel_requested = follow_cancel_requested_;
+      follow_cancel_requested_ = false;
+      cancel_mission_id = cancel_request_mission_id_ != 0
+                              ? cancel_request_mission_id_
+                              : active_mission_id_;
+      cancel_route_id = cancel_request_route_id_ != 0
+                            ? cancel_request_route_id_
+                            : active_route_id_;
+      cancel_route_generation = active_execution_generation_;
+      cancel_request_mission_id_ = 0;
+      cancel_request_route_id_ = 0;
+    }
+    if (cancel_requested)
+    {
+      have_target_ = false;
+      trigger_ = false;
+      need_hover_stop_ = true;
+      flag_escape_emergency_ = true;
+      setFollowState("EMERGENCY_STOPPING");
+      finishFollowAction(navigation_msgs::FollowReferencePathResult::CANCELED,
+                         "manual_cancel",
+                         cancel_mission_id, cancel_route_id,
+                         cancel_route_generation);
+      changeFSMExecState(EMERGENCY_STOP, "FOLLOW_CANCEL");
+    }
+
+    // Process a newly submitted route after cancellation has been consumed.
+    // This guarantees that a route arriving in the same timer period as a
+    // cancel request is staged behind EMERGENCY_STOP instead of being
+    // activated and immediately cleared by it.
+    processPendingFollowRequest();
+
+    {
+      std::lock_guard<std::mutex> lock(follow_mutex_);
+      if (active_route_id_ != 0 && !follow_result_ready_)
+        follow_distance_remaining_ = (end_pt_ - odom_pos_).norm();
+    }
+
     updateLocalTrajTimeFreeze();
+    updateProgressWatchdog();
 
     static int fsm_num = 0;
     fsm_num++;
@@ -959,6 +1426,7 @@ namespace scan_planner
 
     case GEN_NEW_TRAJ:
     {
+      const uint64_t planning_generation = route_generation_;
       setStartStateFromOdomOrCurrentTraj();
 
       // Eigen::Vector3d rot_x = odom_orient_.toRotationMatrix().block(0, 0, 3, 1);
@@ -972,12 +1440,25 @@ namespace scan_planner
         flag_random_poly_init = true;
 
       bool success = callReboundReplan(true, flag_random_poly_init);
+      if (planning_generation != route_generation_)
+      {
+        MOTION_PLANNER_LOG_INFO(
+            "Discarding local trajectory generated for stale route generation %llu; "
+            "latest generation is %llu.",
+            static_cast<unsigned long long>(planning_generation),
+            static_cast<unsigned long long>(route_generation_));
+        changeFSMExecState(GEN_NEW_TRAJ, "STALE_ROUTE");
+        break;
+      }
       if (success)
       {
 
         replan_fail_count_ = 0;
+        progress_watchdog_initialized_ = false;
+        tracking_error_initialized_ = false;
         changeFSMExecState(EXEC_TRAJ, "FSM");
         flag_escape_emergency_ = true;
+        setFollowState("LOCAL_EXECUTING");
       }
       else
       {
@@ -989,14 +1470,54 @@ namespace scan_planner
 
     case REPLAN_TRAJ:
     {
+      const uint64_t planning_generation = route_generation_;
 
-      if (planFromCurrentTraj())
+      MOTION_PLANNER_LOG_INFO(
+          "event=local_replan_started mission_id=%llu route_id=%llu "
+          "request_id=%llu planning_attempt=%u trigger=%s "
+          "trigger_reason=%s reason_code=local_replan",
+          static_cast<unsigned long long>(active_execution_mission_id_),
+          static_cast<unsigned long long>(active_execution_route_id_),
+          static_cast<unsigned long long>(active_execution_request_id_),
+          active_execution_planning_attempt_, active_execution_trigger_.c_str(),
+          active_execution_trigger_reason_.c_str());
+
+      const bool success = planFromCurrentTraj();
+      if (planning_generation != route_generation_)
       {
+        MOTION_PLANNER_LOG_INFO(
+            "Discarding local replan generated for stale route generation %llu; "
+            "latest generation is %llu.",
+            static_cast<unsigned long long>(planning_generation),
+            static_cast<unsigned long long>(route_generation_));
+        changeFSMExecState(GEN_NEW_TRAJ, "STALE_ROUTE");
+      }
+      else if (success)
+      {
+        MOTION_PLANNER_LOG_INFO(
+            "event=local_replan_finished mission_id=%llu route_id=%llu "
+            "request_id=%llu planning_attempt=%u success=true "
+            "reason_code=ok",
+            static_cast<unsigned long long>(active_execution_mission_id_),
+            static_cast<unsigned long long>(active_execution_route_id_),
+            static_cast<unsigned long long>(active_execution_request_id_),
+            active_execution_planning_attempt_);
         replan_fail_count_ = 0;
+        progress_watchdog_initialized_ = false;
+        tracking_error_initialized_ = false;
         changeFSMExecState(EXEC_TRAJ, "FSM");
+        setFollowState("LOCAL_EXECUTING");
       }
       else
       {
+        MOTION_PLANNER_LOG_WARN(
+            "event=local_replan_finished mission_id=%llu route_id=%llu "
+            "request_id=%llu planning_attempt=%u success=false "
+            "reason_code=local_replan_failed",
+            static_cast<unsigned long long>(active_execution_mission_id_),
+            static_cast<unsigned long long>(active_execution_route_id_),
+            static_cast<unsigned long long>(active_execution_request_id_),
+            active_execution_planning_attempt_);
         replan_fail_count_++;
         changeFSMExecState(REPLAN_TRAJ, "FSM");
       }
@@ -1041,6 +1562,34 @@ namespace scan_planner
           MOTION_PLANNER_LOG_INFO("Local window complete (%.2f/%.2fs); planning next window.",
                    global_data.last_progress_time_, global_data.global_duration_);
           changeFSMExecState(REPLAN_TRAJ, "FSM");
+          setFollowState("REPLAN_TRAJ");
+          return;
+        }
+
+        if (navi_mode_ == NAVI_MODE::REFERENCE_PATH &&
+            (end_pt_ - odom_pos_).norm() > goal_reached_tolerance_)
+        {
+          if (progress_replan_attempts_ < max_progress_replan_attempts_)
+          {
+            ++progress_replan_attempts_;
+            progress_watchdog_initialized_ = false;
+            MOTION_PLANNER_LOG_WARN(
+                "Trajectory ended outside goal tolerance; requesting local "
+                "replan %d/%d (remaining=%.3f m).",
+                progress_replan_attempts_, max_progress_replan_attempts_,
+                (end_pt_ - odom_pos_).norm());
+            changeFSMExecState(REPLAN_TRAJ, "GOAL_NOT_REACHED");
+            setFollowState("REPLAN_TRAJ");
+          }
+          else
+          {
+            emergency_stop_reason_ = "goal_not_reached";
+            need_hover_stop_ = true;
+            emergency_stop_result_pending_ = true;
+            flag_escape_emergency_ = true;
+            setFollowState("EMERGENCY_STOPPING");
+            changeFSMExecState(EMERGENCY_STOP, "GOAL_NOT_REACHED");
+          }
           return;
         }
 
@@ -1063,6 +1612,20 @@ namespace scan_planner
           current_wp_ = 0;
         }
 
+        uint64_t execution_mission_id = 0;
+        uint64_t execution_route_id = 0;
+        uint64_t execution_generation = 0;
+        {
+          std::lock_guard<std::mutex> lock(follow_mutex_);
+          execution_mission_id = active_execution_mission_id_;
+          execution_route_id = active_execution_route_id_;
+          execution_generation = active_execution_generation_;
+        }
+        finishFollowAction(
+            navigation_msgs::FollowReferencePathResult::SUCCEEDED,
+            "trajectory_completed", execution_mission_id,
+            execution_route_id, execution_generation,
+            active_route_endpoint_truncated_ ? "endpoint_truncated" : "ok");
         have_target_ = false;
 
         changeFSMExecState(WAIT_TARGET, "FSM");
@@ -1081,6 +1644,7 @@ namespace scan_planner
       else
       {
         changeFSMExecState(REPLAN_TRAJ, "FSM");
+        setFollowState("REPLAN_TRAJ");
       }
       break;
     }
@@ -1090,7 +1654,19 @@ namespace scan_planner
       if (odom_vel_.head<2>().norm() <= direction_change_stop_speed_)
       {
         replan_fail_count_ = 0;
+        if (pending_route_ready_)
+        {
+          std::string error;
+          if (!activatePendingRoute(error))
+          {
+            have_target_ = false;
+            trigger_ = false;
+            changeFSMExecState(WAIT_TARGET, "ROUTE_REJECTED");
+            break;
+          }
+        }
         changeFSMExecState(GEN_NEW_TRAJ, "BRAKE_COMPLETE");
+        setFollowState("GEN_NEW_TRAJ");
       }
       break;
     }
@@ -1105,20 +1681,135 @@ namespace scan_planner
       else
       {
         if (enable_fail_safe_ && !need_hover_stop_ && odom_vel_.norm() < 0.1)
-          changeFSMExecState(GEN_NEW_TRAJ, "FSM");
+        {
+          if (pending_route_ready_)
+          {
+            emergency_stop_result_pending_ = false;
+            std::string error;
+            if (!activatePendingRoute(error))
+            {
+              MOTION_PLANNER_LOG_WARN(
+                  "Pending route could not be activated after safety stop: %s",
+                  error.c_str());
+              have_target_ = false;
+              trigger_ = false;
+              changeFSMExecState(WAIT_TARGET, "ROUTE_REJECTED");
+            }
+            else
+            {
+              changeFSMExecState(GEN_NEW_TRAJ, "EMERGENCY_EXIT_NEW_ROUTE");
+              setFollowState("GEN_NEW_TRAJ");
+            }
+          }
+          else if (emergency_stop_result_pending_)
+          {
+            emergency_stop_result_pending_ = false;
+            uint64_t execution_mission_id = 0;
+            uint64_t execution_route_id = 0;
+            uint64_t execution_generation = 0;
+            {
+              std::lock_guard<std::mutex> lock(follow_mutex_);
+              execution_mission_id = active_execution_mission_id_;
+              execution_route_id = active_execution_route_id_;
+              execution_generation = active_execution_generation_;
+            }
+              finishFollowAction(
+                  navigation_msgs::FollowReferencePathResult::EMERGENCY_STOPPED,
+                  emergency_stop_reason_.empty()
+                      ? "trajectory_collision"
+                      : emergency_stop_reason_,
+                  execution_mission_id, execution_route_id,
+                  execution_generation,
+                  emergency_stop_reason_.empty()
+                      ? "trajectory_collision"
+                      : emergency_stop_reason_);
+            MOTION_PLANNER_LOG_INFO(
+                "event=emergency_stop_completed mission_id=%llu route_id=%llu "
+                "request_id=%llu planning_attempt=%u reason_code=%s",
+                static_cast<unsigned long long>(execution_mission_id),
+                static_cast<unsigned long long>(execution_route_id),
+                static_cast<unsigned long long>(active_execution_request_id_),
+                active_execution_planning_attempt_,
+                emergency_stop_reason_.empty() ? "trajectory_collision"
+                                               : emergency_stop_reason_.c_str());
+            have_target_ = false;
+            trigger_ = false;
+            changeFSMExecState(WAIT_TARGET, "EMERGENCY_EXIT");
+          }
+          else
+          {
+            changeFSMExecState(GEN_NEW_TRAJ, "FSM");
+          }
+        }
         else if (need_hover_stop_ && odom_vel_.norm() < 0.1)
         {
-          MOTION_PLANNER_LOG_INFO("Exiting EMERGENCY_STOP. Switching to WAIT_TARGET. Need a new target point.");
           need_hover_stop_ = false;
-          have_target_ = false;
-          trigger_ = false;
-          if (global_replan_after_local_failure_)
+          if (pending_route_ready_)
           {
-            global_replan_after_local_failure_ = false;
-            replan_pub_.publish(std_msgs::Empty());
-            MOTION_PLANNER_LOG_WARN("Local replanning budget exhausted; requesting PCT global replan.");
+            emergency_stop_result_pending_ = false;
+            setFollowState("READY_FOR_NEW_ROUTE");
+            std::string error;
+            if (!activatePendingRoute(error))
+            {
+              MOTION_PLANNER_LOG_WARN(
+                  "Pending route could not be activated after emergency stop: %s",
+                  error.c_str());
+              have_target_ = false;
+              trigger_ = false;
+              changeFSMExecState(WAIT_TARGET, "ROUTE_REJECTED");
+              break;
+            }
+            changeFSMExecState(GEN_NEW_TRAJ, "EMERGENCY_EXIT_NEW_ROUTE");
+            setFollowState("GEN_NEW_TRAJ");
           }
-          changeFSMExecState(WAIT_TARGET, "EMERGENCY_EXIT");
+          else
+          {
+            if (emergency_stop_result_pending_)
+            {
+              emergency_stop_result_pending_ = false;
+              uint64_t execution_mission_id = 0;
+              uint64_t execution_route_id = 0;
+              uint64_t execution_generation = 0;
+              {
+                std::lock_guard<std::mutex> lock(follow_mutex_);
+                execution_mission_id = active_execution_mission_id_;
+                execution_route_id = active_execution_route_id_;
+                execution_generation = active_execution_generation_;
+              }
+              const bool recoverable_execution_failure =
+                  emergency_stop_reason_ == "local_replan_exhausted" ||
+                  emergency_stop_reason_ == "progress_stalled" ||
+                  emergency_stop_reason_ == "trajectory_deviation" ||
+                  emergency_stop_reason_ == "goal_not_reached";
+              finishFollowAction(
+                  recoverable_execution_failure
+                      ? navigation_msgs::FollowReferencePathResult::FAILED
+                      : navigation_msgs::FollowReferencePathResult::EMERGENCY_STOPPED,
+                  emergency_stop_reason_.empty()
+                      ? "trajectory_collision"
+                      : emergency_stop_reason_,
+                  execution_mission_id, execution_route_id,
+                  execution_generation,
+                  emergency_stop_reason_.empty()
+                      ? "trajectory_collision"
+                      : emergency_stop_reason_);
+              MOTION_PLANNER_LOG_INFO(
+                  "event=emergency_stop_completed mission_id=%llu "
+                  "route_id=%llu request_id=%llu planning_attempt=%u "
+                  "result=%s reason_code=%s",
+                  static_cast<unsigned long long>(execution_mission_id),
+                  static_cast<unsigned long long>(execution_route_id),
+                  static_cast<unsigned long long>(active_execution_request_id_),
+                  active_execution_planning_attempt_,
+                  recoverable_execution_failure ? "FAILED" : "EMERGENCY_STOPPED",
+                  emergency_stop_reason_.empty() ? "trajectory_collision"
+                                                 : emergency_stop_reason_.c_str());
+            }
+            MOTION_PLANNER_LOG_INFO("Exiting EMERGENCY_STOP. Switching to WAIT_TARGET. Need a new target point.");
+            have_target_ = false;
+            trigger_ = false;
+            changeFSMExecState(WAIT_TARGET, "EMERGENCY_EXIT");
+          }
         }
       }
 
@@ -1137,14 +1828,157 @@ namespace scan_planner
   {
     if (replan_fail_count_ >= max_replan_fail_count_)
     {
-      const bool request_global_replan = navi_mode_ == NAVI_MODE::REFERENCE_PATH;
-      MOTION_PLANNER_LOG_WARN("Replan failed %d times. Emergency stop and wait for a new target.", replan_fail_count_);
+      MOTION_PLANNER_LOG_WARN(
+          "event=emergency_stop_started mission_id=%llu route_id=%llu "
+          "request_id=%llu planning_attempt=%u "
+          "reason_code=local_replan_exhausted replan_fail_count=%d",
+          static_cast<unsigned long long>(active_execution_mission_id_),
+          static_cast<unsigned long long>(active_execution_route_id_),
+          static_cast<unsigned long long>(active_execution_request_id_),
+          active_execution_planning_attempt_,
+          replan_fail_count_);
       replan_fail_count_ = 0;
       need_hover_stop_ = true;
-      global_replan_after_local_failure_ = request_global_replan;
+      emergency_stop_result_pending_ = true;
+      emergency_stop_reason_ = "local_replan_exhausted";
       flag_escape_emergency_ = true;
       changeFSMExecState(EMERGENCY_STOP, "finishProcess");
     }
+  }
+
+  void SCANReplanFSM::updateProgressWatchdog()
+  {
+    if (navi_mode_ != NAVI_MODE::REFERENCE_PATH || exec_state_ != EXEC_TRAJ ||
+        active_execution_route_id_ == 0)
+    {
+      progress_watchdog_initialized_ = false;
+      tracking_error_initialized_ = false;
+      return;
+    }
+
+    const ros::WallTime now = ros::WallTime::now();
+    const double remaining = (end_pt_ - odom_pos_).norm();
+    if (!progress_watchdog_initialized_)
+    {
+      progress_anchor_position_ = odom_pos_;
+      progress_anchor_remaining_distance_ = remaining;
+      progress_anchor_time_ = now;
+      progress_watchdog_initialized_ = true;
+      return;
+    }
+
+    if (go2_execution_frozen_)
+    {
+      progress_anchor_position_ = odom_pos_;
+      progress_anchor_remaining_distance_ = remaining;
+      progress_anchor_time_ = now;
+      tracking_error_initialized_ = false;
+      return;
+    }
+
+    bool tracking_error_ok = true;
+    LocalTrajData *active_traj = &planner_manager_->local_data_;
+    if (active_traj->start_time_.toSec() > 1e-5 &&
+        active_traj->duration_ > 1e-5)
+    {
+      const double trajectory_time = std::min(
+          std::max((ros::Time::now() - active_traj->start_time_).toSec(), 0.0),
+          active_traj->duration_);
+      const Eigen::Vector3d predicted_position =
+          active_traj->position_traj_.evaluateDeBoorT(trajectory_time);
+      const double tracking_error = (odom_pos_ - predicted_position).norm();
+      tracking_error_ok = tracking_error <= progress_tracking_error_tolerance_;
+      if (!tracking_error_ok)
+      {
+        if (!tracking_error_initialized_)
+        {
+          tracking_error_since_ = now;
+          tracking_error_initialized_ = true;
+        }
+        else if ((now - tracking_error_since_).toSec() >= progress_timeout_sec_)
+        {
+          if (progress_replan_attempts_ < max_progress_replan_attempts_)
+          {
+            ++progress_replan_attempts_;
+            progress_watchdog_initialized_ = false;
+            tracking_error_initialized_ = false;
+            MOTION_PLANNER_LOG_WARN(
+                "event=trajectory_tracking_error mission_id=%llu route_id=%llu "
+                "replan=%d/%d error=%.3f tolerance=%.3f",
+                static_cast<unsigned long long>(active_execution_mission_id_),
+                static_cast<unsigned long long>(active_execution_route_id_),
+                progress_replan_attempts_, max_progress_replan_attempts_,
+                tracking_error, progress_tracking_error_tolerance_);
+            changeFSMExecState(REPLAN_TRAJ, "TRAJECTORY_DEVIATION");
+            setFollowState("REPLAN_TRAJ");
+          }
+          else
+          {
+            emergency_stop_reason_ = "trajectory_deviation";
+            need_hover_stop_ = true;
+            emergency_stop_result_pending_ = true;
+            flag_escape_emergency_ = true;
+            setFollowState("EMERGENCY_STOPPING");
+            changeFSMExecState(EMERGENCY_STOP, "TRAJECTORY_DEVIATION");
+          }
+          return;
+        }
+      }
+      else
+      {
+        tracking_error_initialized_ = false;
+      }
+    }
+
+    const double displacement = (odom_pos_ - progress_anchor_position_).norm();
+    const double distance_reduction =
+        progress_anchor_remaining_distance_ - remaining;
+    if (tracking_error_ok &&
+        (displacement >= progress_min_distance_ ||
+         distance_reduction >= progress_min_distance_))
+    {
+      progress_anchor_position_ = odom_pos_;
+      progress_anchor_remaining_distance_ = remaining;
+      progress_anchor_time_ = now;
+      progress_replan_attempts_ = 0;
+      return;
+    }
+
+    if ((now - progress_anchor_time_).toSec() < progress_timeout_sec_)
+      return;
+
+    if (progress_replan_attempts_ < max_progress_replan_attempts_)
+    {
+      ++progress_replan_attempts_;
+      progress_anchor_position_ = odom_pos_;
+      progress_anchor_remaining_distance_ = remaining;
+      progress_anchor_time_ = now;
+      MOTION_PLANNER_LOG_WARN(
+          "event=progress_stalled mission_id=%llu route_id=%llu "
+          "reason_code=progress_stalled local_replan=%d/%d "
+          "remaining_distance=%.3f displacement=%.3f",
+          static_cast<unsigned long long>(active_execution_mission_id_),
+          static_cast<unsigned long long>(active_execution_route_id_),
+          progress_replan_attempts_, max_progress_replan_attempts_, remaining,
+          displacement);
+      changeFSMExecState(REPLAN_TRAJ, "PROGRESS_STALLED");
+      setFollowState("REPLAN_TRAJ");
+      return;
+    }
+
+    MOTION_PLANNER_LOG_ERROR(
+        "event=progress_stalled mission_id=%llu route_id=%llu "
+        "reason_code=progress_stalled local_replans_exhausted=%d "
+        "remaining_distance=%.3f displacement=%.3f",
+        static_cast<unsigned long long>(active_execution_mission_id_),
+        static_cast<unsigned long long>(active_execution_route_id_),
+        progress_replan_attempts_, remaining, displacement);
+    emergency_stop_reason_ = "progress_stalled";
+    need_hover_stop_ = true;
+    emergency_stop_result_pending_ = true;
+    flag_escape_emergency_ = true;
+    setFollowState("EMERGENCY_STOPPING");
+    changeFSMExecState(EMERGENCY_STOP, "PROGRESS_STALLED");
   }
 
   bool SCANReplanFSM::planFromCurrentTraj()
@@ -1283,9 +2117,25 @@ namespace scan_planner
       {
         if (exec_state_ == BRAKE_FOR_NEW_TARGET)
         {
-          MOTION_PLANNER_LOG_WARN("Braking trajectory is in collision; emergency stop.");
+          emergency_stop_reason_ = "braking_trajectory_collision";
+          MOTION_PLANNER_LOG_WARN(
+              "event=local_collision_detected mission_id=%llu route_id=%llu "
+              "request_id=%llu planning_attempt=%u reason_code=%s",
+              static_cast<unsigned long long>(active_execution_mission_id_),
+              static_cast<unsigned long long>(active_execution_route_id_),
+              static_cast<unsigned long long>(active_execution_request_id_),
+              active_execution_planning_attempt_, emergency_stop_reason_.c_str());
+          MOTION_PLANNER_LOG_WARN(
+              "event=emergency_stop_started mission_id=%llu route_id=%llu "
+              "request_id=%llu planning_attempt=%u reason_code=%s",
+              static_cast<unsigned long long>(active_execution_mission_id_),
+              static_cast<unsigned long long>(active_execution_route_id_),
+              static_cast<unsigned long long>(active_execution_request_id_),
+              active_execution_planning_attempt_, emergency_stop_reason_.c_str());
           flag_escape_emergency_ = true;
           need_hover_stop_ = false;
+          emergency_stop_result_pending_ = true;
+          setFollowState("EMERGENCY_STOPPING");
           changeFSMExecState(EMERGENCY_STOP, "SAFETY");
           return;
         }
@@ -1298,7 +2148,25 @@ namespace scan_planner
         {
           if (t - t_cur < emergency_time_) // 0.8s of emergency time
           {
-            MOTION_PLANNER_LOG_WARN("Suddenly discovered obstacles. emergency stop! time=%f", t - t_cur);
+            emergency_stop_reason_ = "trajectory_collision";
+            MOTION_PLANNER_LOG_WARN(
+                "event=local_collision_detected mission_id=%llu route_id=%llu "
+                "request_id=%llu planning_attempt=%u reason_code=%s "
+                "collision_time=%.3f",
+                static_cast<unsigned long long>(active_execution_mission_id_),
+                static_cast<unsigned long long>(active_execution_route_id_),
+                static_cast<unsigned long long>(active_execution_request_id_),
+                active_execution_planning_attempt_,
+                emergency_stop_reason_.c_str(), t - t_cur);
+            MOTION_PLANNER_LOG_WARN(
+                "event=emergency_stop_started mission_id=%llu route_id=%llu "
+                "request_id=%llu planning_attempt=%u reason_code=%s",
+                static_cast<unsigned long long>(active_execution_mission_id_),
+                static_cast<unsigned long long>(active_execution_route_id_),
+                static_cast<unsigned long long>(active_execution_request_id_),
+                active_execution_planning_attempt_, emergency_stop_reason_.c_str());
+            emergency_stop_result_pending_ = true;
+            setFollowState("EMERGENCY_STOPPING");
             changeFSMExecState(EMERGENCY_STOP, "SAFETY");
           }
           else

@@ -6,6 +6,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import fcntl
+
 
 def _env_bool(name, default=False):
     value = os.environ.get(name)
@@ -56,44 +58,36 @@ class _DailyFileHandler(logging.Handler):
         super().__init__()
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self._date = None
-        self._stream = None
-        self._stream_path = None
         try:
             self._max_bytes = int(os.environ.get("MOTION_PLANNER_LOG_MAX_MB", "0")) * 1024 * 1024
         except ValueError:
             self._max_bytes = 0
 
-    def _ensure_stream(self):
-        date = datetime.now().strftime("%Y%m%d")
-        if date == self._date and self._stream is not None:
-            return
-        if self._stream is not None:
-            self._stream.close()
-        self._date = date
-        self._stream_path = self.directory / (date + ".log")
-        self._stream = open(self._stream_path, "a", encoding="utf-8")
-
     def emit(self, record):
         try:
-            self._ensure_stream()
-            line = self.format(record) + "\n"
-            if self._max_bytes and self._stream.tell() >= self._max_bytes:
-                self._stream.close()
-                rotated = self._stream_path.with_name(self._stream_path.name + ".1")
-                if rotated.exists():
-                    rotated.unlink()
-                self._stream_path.replace(rotated)
-                self._stream = open(self._stream_path, "w", encoding="utf-8")
-            self._stream.write(line)
-            self._stream.flush()
+            line = (self.format(record) + "\n").encode("utf-8")
+            date = datetime.now().strftime("%Y%m%d")
+            stream_path = self.directory / (date + ".log")
+            lock_path = self.directory / ".lock"
+            with open(lock_path, "a+") as lock:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+                if self._max_bytes and stream_path.exists() and stream_path.stat().st_size >= self._max_bytes:
+                    rotated = stream_path.with_name(stream_path.name + ".1")
+                    if rotated.exists():
+                        rotated.unlink()
+                    stream_path.replace(rotated)
+                fd = os.open(str(stream_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+                try:
+                    offset = 0
+                    while offset < len(line):
+                        offset += os.write(fd, line[offset:])
+                finally:
+                    os.close(fd)
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
         except Exception:
             self.handleError(record)
 
     def close(self):
-        if self._stream is not None:
-            self._stream.close()
-            self._stream = None
         super().close()
 
 
@@ -117,8 +111,10 @@ class _ConsoleFormatter(logging.Formatter):
         )
 
 
-def configure(module_name):
+def configure(package_name, module_name=None):
     """Configure and return a module logger. Safe to call more than once."""
+    if module_name is None:
+        module_name = package_name
     logging.setLoggerClass(_MotionPlannerLogger)
     logger = logging.getLogger(module_name)
     if getattr(logger, "_motion_planner_configured", False):
@@ -131,10 +127,9 @@ def configure(module_name):
     formatter = _ConsoleFormatter()
 
     try:
-        file_handler = _DailyFileHandler(_log_root() / module_name)
+        file_handler = _DailyFileHandler(_log_root() / package_name)
     except OSError:
-        file_handler = _DailyFileHandler(
-            Path.home() / ".ros" / "log" / "motion_planner" / module_name)
+        file_handler = _DailyFileHandler(Path.home() / ".ros" / "log" / "motion_planner" / package_name)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

@@ -164,7 +164,7 @@ void publishMap(const TomogramData& map, const std::string& frame,
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "pct_tomography_node");
-  motion_planner_log::initialize("global_pct_tomography", argv[0]);
+  motion_planner_log::initialize("global_pct_planner", "global_pct_tomography", argv[0]);
   ros::NodeHandle private_handle("~");
 
   std::string pcd_file;

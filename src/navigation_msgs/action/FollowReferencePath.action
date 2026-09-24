@@ -1,0 +1,29 @@
+uint64 mission_id
+uint64 route_id
+uint64 request_id
+uint32 planning_attempt
+string trigger
+string trigger_reason
+nav_msgs/Path path
+---
+uint8 SUCCEEDED=0
+uint8 REJECTED=2
+uint8 CANCELED=3
+uint8 EMERGENCY_STOPPED=4
+uint8 FAILED=5
+uint8 result
+string message
+string reason_code
+geometry_msgs/PoseStamped execution_goal
+geometry_msgs/PoseStamped final_pose
+float64 remaining_distance
+bool endpoint_truncated
+---
+uint64 mission_id
+uint64 route_id
+uint64 request_id
+uint32 planning_attempt
+string trigger
+string trigger_reason
+string state
+float64 distance_remaining

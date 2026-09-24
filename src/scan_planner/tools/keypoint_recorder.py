@@ -241,7 +241,7 @@ def main():
 
     rospy.init_node("keypoint_recorder")
     global logger
-    logger = configure("keypoint_recorder")
+    logger = configure("scan_planner", "keypoint_recorder")
     recorder = KeypointRecorder(args)
     recorder.run()
 

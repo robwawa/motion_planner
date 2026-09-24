@@ -1985,7 +1985,7 @@ shared(use_avia_pattern, use_vlp32_pattern, use_minicf_pattern, is_360lidar,    
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "pcl_render");
-  motion_planner_log::initialize("pointcloud_render_node", argv[0]);
+  motion_planner_log::initialize("scan_planner", "pointcloud_render_node", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: point-cloud renderer.");
   ros::NodeHandle nh("~");
 

@@ -425,7 +425,7 @@ def main():
     args, _ = parser.parse_known_args()
     rospy.init_node('pct_planner')
     global logger
-    logger = configure('pct_planner')
+    logger = configure('pct_planner', 'pct_planner')
     PCTActionServer(rospy.get_param('~navigation_frame', 'map'),
                     rospy.get_param('~body_height', 0.4),
                     rospy.get_param('~layer_height_tolerance', 0.75),

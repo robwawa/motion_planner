@@ -1,0 +1,54 @@
+<launch>
+  <arg name="launch_planners" default="true" />
+  <arg name="tomogram_name" default="building2_9" />
+  <arg name="tomogram_dir"
+       default="$(find global_pct_planner)/rsc/tomogram" />
+  <arg name="controller_mode" default="closed_loop" />
+  <arg name="use_external_simulator" default="false" />
+  <arg name="use_pcd_map" default="false" />
+  <arg name="pcd_map_file"
+       default="$(find global_pct_planner)/rsc/pcd/building2_9.pcd" />
+  <arg name="body_pose_topic" default="/quad_0/body_pose" />
+  <arg name="rviz_goal_topic" default="/move_base_simple/goal" />
+  <arg name="default_goal_z" default="0.4" />
+
+  <!-- This launch file is self-contained by default. Integrated demos set
+       launch_planners:=false because they provide map-specific planner and
+       SCAN launch arguments before including this supervisor. -->
+  <include if="$(arg launch_planners)"
+           file="$(find global_pct_planner)/launch/planner.launch">
+    <arg name="tomogram_name" value="$(arg tomogram_name)" />
+    <arg name="tomogram_dir" value="$(arg tomogram_dir)" />
+  </include>
+  <include if="$(arg launch_planners)"
+           file="$(find scan_planner)/launch/run.launch">
+    <arg name="is_real_world" value="false" />
+    <arg name="use_external_simulator" value="$(arg use_external_simulator)" />
+    <arg name="navi_mode" value="3" />
+    <arg name="controller_mode" value="$(arg controller_mode)" />
+    <arg name="navigation_frame" value="map" />
+    <arg name="reference_path_topic" value="/navigation/reference_path" />
+    <arg name="use_pcd_map" value="$(arg use_pcd_map)" />
+    <arg name="pcd_map_file" value="$(arg pcd_map_file)" />
+    <arg name="body_pose_topic" value="$(arg body_pose_topic)" />
+    <arg name="sensor_pose_topic" value="$(arg body_pose_topic)" />
+  </include>
+
+  <node pkg="navigation_supervisor"
+        type="navigation_supervisor_node"
+        name="navigation_supervisor"
+        output="screen">
+    <rosparam command="load" file="$(find navigation_supervisor)/config/navigation.yaml" />
+    <param name="tree_file" value="$(find navigation_supervisor)/config/navigation_tree.xml" />
+    <param name="body_pose_topic" value="$(arg body_pose_topic)" />
+    <param name="rviz_goal_topic" value="$(arg rviz_goal_topic)" />
+    <param name="default_goal_z" value="$(arg default_goal_z)" />
+  </node>
+  <node pkg="pct_scan_navigation"
+        type="goal_interactive_marker.py"
+        name="goal_interactive_marker"
+        output="screen">
+    <param name="body_pose_topic" value="$(arg body_pose_topic)" />
+    <rosparam command="load" file="$(find navigation_supervisor)/config/navigation.yaml" />
+  </node>
+</launch>

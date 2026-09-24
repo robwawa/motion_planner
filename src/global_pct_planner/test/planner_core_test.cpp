@@ -29,6 +29,23 @@ TomogramData plannerMap() {
   return map;
 }
 
+TomogramData mapWithObstacleWall(bool static_wall) {
+  TomogramData map = plannerMap();
+  map.rows = 15;
+  map.cols = 15;
+  const std::size_t count = map.cellCount();
+  map.traversability.assign(count, 0.0f);
+  map.traversability_grad_x.assign(count, 0.0f);
+  map.traversability_grad_y.assign(count, 0.0f);
+  map.ground_elevation.assign(count, 0.0f);
+  map.ceiling_elevation.assign(count, 2.0f);
+  for (uint32_t col = 0; col < map.cols; ++col) {
+    if (col == 7) continue;
+    map.traversability[map.index(0, 7, col)] = static_wall ? 100.0f : 0.0f;
+  }
+  return map;
+}
+
 }  // namespace
 
 TEST(PlannerCore, SnapsAndPlansWithLegacyAStar) {
@@ -150,6 +167,56 @@ TEST(PlannerCore, OptimizedPathUsesLegacyWorldCoordinateConvention) {
   }
   EXPECT_GT(output.path.back().x, output.path.front().x);
   EXPECT_GT(output.path.back().y, output.path.front().y);
+}
+
+TEST(PlannerCore, DynamicCostAndStaticCostProduceEquivalentGpmpInput) {
+  const TomogramData static_map = mapWithObstacleWall(true);
+  const TomogramData dynamic_map = mapWithObstacleWall(false);
+
+  PlannerCore static_planner;
+  PlannerCore dynamic_planner;
+  ASSERT_NO_THROW(static_planner.load(static_map, 10.0f, false));
+  ASSERT_NO_THROW(dynamic_planner.load(dynamic_map, 10.0f, false));
+
+  const PointXYZ start_position{static_map.center_x - 6.0f,
+                                static_map.center_y - 6.0f, 0.2f};
+  const PointXYZ goal_position{static_map.center_x + 6.0f,
+                               static_map.center_y + 6.0f, 0.2f};
+  const SnapResult static_start = static_planner.snapToTraversable(
+      start_position, 0.2f, 0);
+  const SnapResult static_goal = static_planner.snapToTraversable(
+      goal_position, 0.2f, 0);
+  const SnapResult dynamic_start = dynamic_planner.snapToTraversable(
+      start_position, 0.2f, 0);
+  const SnapResult dynamic_goal = dynamic_planner.snapToTraversable(
+      goal_position, 0.2f, 0);
+  ASSERT_TRUE(static_start.found);
+  ASSERT_TRUE(static_goal.found);
+  ASSERT_TRUE(dynamic_start.found);
+  ASSERT_TRUE(dynamic_goal.found);
+
+  auto snapshot = std::make_shared<DynamicSnapshot>();
+  snapshot->cost.assign(dynamic_map.cellCount(), 0);
+  for (uint32_t col = 0; col < dynamic_map.cols; ++col) {
+    if (col != 7) snapshot->cost[dynamic_map.index(0, 7, col)] = 100;
+  }
+  snapshot->lethal_cost = 100;
+  dynamic_planner.setDynamicSnapshot(snapshot);
+
+  PlanOutput static_output;
+  PlanOutput dynamic_output;
+  ASSERT_TRUE(static_planner.plan(static_start, static_goal, 0.2f, true,
+                                  static_output));
+  ASSERT_TRUE(dynamic_planner.plan(dynamic_start, dynamic_goal, 0.2f, true,
+                                   dynamic_output));
+  ASSERT_EQ(dynamic_output.path.size(), static_output.path.size());
+  ASSERT_EQ(dynamic_output.layers.size(), static_output.layers.size());
+  for (std::size_t i = 0; i < static_output.path.size(); ++i) {
+    EXPECT_EQ(dynamic_output.layers[i], static_output.layers[i]);
+    EXPECT_NEAR(dynamic_output.path[i].x, static_output.path[i].x, 1e-5f);
+    EXPECT_NEAR(dynamic_output.path[i].y, static_output.path[i].y, 1e-5f);
+    EXPECT_NEAR(dynamic_output.path[i].z, static_output.path[i].z, 1e-5f);
+  }
 }
 
 TEST(PlannerCore, QuinticOptimizedPathUsesLegacyWorldCoordinateConvention) {

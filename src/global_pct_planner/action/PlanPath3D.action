@@ -1,6 +1,10 @@
 # All poses are base_link poses expressed in the configured navigation frame.
 geometry_msgs/PoseStamped start
 geometry_msgs/PoseStamped goal
+uint64 mission_id
+uint32 planning_attempt
+string trigger
+string trigger_reason
 ---
 uint8 SUCCESS=0
 uint8 INVALID_REQUEST=1
@@ -12,6 +16,7 @@ uint8 PREEMPTED=6
 uint8 INTERNAL_ERROR=7
 uint8 status
 string message
+string reason_code
 nav_msgs/Path path
 bool has_snapped_start
 bool has_snapped_goal
@@ -20,4 +25,9 @@ geometry_msgs/PoseStamped snapped_goal
 float64 snapped_start_distance
 float64 snapped_goal_distance
 ---
+uint64 request_id
+uint64 mission_id
+uint32 planning_attempt
+uint32 dynamic_retry_count
+uint64 dynamic_snapshot_version
 string stage

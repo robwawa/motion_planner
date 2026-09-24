@@ -13,7 +13,7 @@
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "map_pub");
-  motion_planner_log::initialize("map_publisher", argv[0]);
+  motion_planner_log::initialize("scan_planner", "map_publisher", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: map publisher.");
   ros::NodeHandle node;
   ros::NodeHandle private_node("~");

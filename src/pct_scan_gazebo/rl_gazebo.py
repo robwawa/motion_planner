@@ -7,7 +7,7 @@ import threading
 import rospy
 from motion_planner_log import configure
 
-logger = configure("a1_rl_policy")
+logger = configure("pct_scan_gazebo", "a1_rl_policy")
 
 try:
     import torch

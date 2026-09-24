@@ -93,6 +93,6 @@ class PointCloudBridge:
 
 if __name__ == "__main__":
     rospy.init_node("pct_scan_pointcloud_bridge")
-    logger = configure("pct_scan_pointcloud_bridge")
+    logger = configure("pct_scan_gazebo", "pct_scan_pointcloud_bridge")
     PointCloudBridge()
     rospy.spin()

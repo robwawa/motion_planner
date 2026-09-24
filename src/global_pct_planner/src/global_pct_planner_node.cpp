@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -29,6 +31,22 @@
 
 namespace global_pct_planner {
 namespace {
+
+std::string normalizeLogToken(const std::string& value,
+                              const std::string& fallback) {
+  if (value.empty()) return fallback;
+  std::string output;
+  output.reserve(value.size());
+  for (const char character : value) {
+    const unsigned char byte = static_cast<unsigned char>(character);
+    if (std::isalnum(byte) || character == '_' || character == '-') {
+      output.push_back(static_cast<char>(std::tolower(byte)));
+    } else {
+      output.push_back('_');
+    }
+  }
+  return output.empty() ? fallback : output;
+}
 
 bool finitePose(const geometry_msgs::Pose& pose) {
   return std::isfinite(pose.position.x) && std::isfinite(pose.position.y) &&
@@ -226,10 +244,10 @@ class GlobalPctPlannerNode {
     if (!tomogram_dir_.empty() && tomogram_dir_.back() != '/') tomogram_dir_ += '/';
     loadTomogram();
 
-    global_path_publisher_ =
-        nh_.advertise<nav_msgs::Path>("/pct/global_path", 1, true);
     dynamic_ok_publisher_ = nh_.advertise<std_msgs::Bool>(
         "/pct/dynamic_layer_ok", 1, true);
+    dynamic_enabled_publisher_ = nh_.advertise<std_msgs::Bool>(
+        "/pct/dynamic_layer_enabled", 1, true);
     dynamic_version_publisher_ = nh_.advertise<std_msgs::UInt64>(
         "/pct/dynamic_version", 1, true);
     dynamic_cloud_publisher_ = nh_.advertise<sensor_msgs::PointCloud2>(
@@ -250,6 +268,9 @@ class GlobalPctPlannerNode {
     } else {
       publishDynamicOk(true);
     }
+    std_msgs::Bool dynamic_enabled_message;
+    dynamic_enabled_message.data = dynamic_enabled_;
+    dynamic_enabled_publisher_.publish(dynamic_enabled_message);
     endpoint_snap_radius_cells_ = std::max(
         0, static_cast<int>(std::ceil(endpoint_snap_radius_ / map_.resolution)));
     action_server_.start();
@@ -262,6 +283,18 @@ class GlobalPctPlannerNode {
   }
 
  private:
+  struct RequestTrace {
+    uint64_t request_id{0};
+    uint64_t mission_id{0};
+    uint32_t planning_attempt{0};
+    std::string trigger{"external"};
+    std::string trigger_reason{"direct_request"};
+    std::string mode{"astar"};
+    ros::WallTime started;
+    uint32_t dynamic_retry_count{0};
+    uint64_t dynamic_snapshot_version{0};
+  };
+
   template <typename T>
   static T readParam(const std::string& name, const T& fallback) {
     T value;
@@ -439,10 +472,104 @@ class GlobalPctPlannerNode {
     }
   }
 
-  void feedback(const std::string& stage) {
+  static const char* statusName(uint8_t status) {
+    switch (status) {
+      case PlanPath3DResult::SUCCESS: return "SUCCESS";
+      case PlanPath3DResult::INVALID_REQUEST: return "INVALID_REQUEST";
+      case PlanPath3DResult::FRAME_MISMATCH: return "FRAME_MISMATCH";
+      case PlanPath3DResult::OUT_OF_MAP: return "OUT_OF_MAP";
+      case PlanPath3DResult::NO_TRAVERSABLE_LAYER:
+        return "NO_TRAVERSABLE_LAYER";
+      case PlanPath3DResult::NO_PATH: return "NO_PATH";
+      case PlanPath3DResult::PREEMPTED: return "PREEMPTED";
+      case PlanPath3DResult::INTERNAL_ERROR: return "INTERNAL_ERROR";
+      default: return "UNKNOWN";
+    }
+  }
+
+  static double elapsedMs(const RequestTrace& trace) {
+    return (ros::WallTime::now() - trace.started).toSec() * 1000.0;
+  }
+
+  void feedback(const RequestTrace& trace, const std::string& stage) {
     PlanPath3DFeedback message;
+    message.request_id = trace.request_id;
+    message.mission_id = trace.mission_id;
+    message.planning_attempt = trace.planning_attempt;
+    message.dynamic_retry_count = trace.dynamic_retry_count;
+    message.dynamic_snapshot_version = trace.dynamic_snapshot_version;
     message.stage = stage;
     action_server_.publishFeedback(message);
+  }
+
+  void logGoalReceived(const RequestTrace& trace,
+                       const PlanPath3DGoalConstPtr& goal) const {
+    MOTION_PLANNER_LOG_INFO(
+        "event=goal_received request_id=%llu mission_id=%llu "
+        "planning_attempt=%u trigger=%s trigger_reason=%s "
+        "start_frame=%s goal_frame=%s start_x=%.3f start_y=%.3f "
+        "start_z=%.3f goal_x=%.3f goal_y=%.3f goal_z=%.3f",
+        static_cast<unsigned long long>(trace.request_id),
+        static_cast<unsigned long long>(trace.mission_id),
+        trace.planning_attempt, trace.trigger.c_str(),
+        trace.trigger_reason.c_str(), goal->start.header.frame_id.c_str(),
+        goal->goal.header.frame_id.c_str(), goal->start.pose.position.x,
+        goal->start.pose.position.y, goal->start.pose.position.z,
+        goal->goal.pose.position.x, goal->goal.pose.position.y,
+        goal->goal.pose.position.z);
+  }
+
+  void logTerminal(const RequestTrace& trace, const char* event,
+                   uint8_t status, const std::string& reason_code,
+                   const std::string& message, const char* phase,
+                   std::size_t path_points = 0) const {
+    MOTION_PLANNER_LOG_INFO(
+        "event=%s request_id=%llu mission_id=%llu planning_attempt=%u "
+        "trigger=%s trigger_reason=%s phase=%s status=%u status_name=%s "
+        "mode=%s reason_code=%s path_points=%zu dynamic_retry_count=%u "
+        "snapshot_version=%llu duration_ms=%.3f message=%s",
+        event, static_cast<unsigned long long>(trace.request_id),
+        static_cast<unsigned long long>(trace.mission_id),
+        trace.planning_attempt, trace.trigger.c_str(),
+        trace.trigger_reason.c_str(), phase, static_cast<unsigned int>(status),
+        statusName(status), trace.mode.c_str(),
+        normalizeLogToken(reason_code, "unspecified").c_str(), path_points,
+        trace.dynamic_retry_count,
+        static_cast<unsigned long long>(trace.dynamic_snapshot_version),
+        elapsedMs(trace), normalizeLogToken(message, "-").c_str());
+  }
+
+  void logPlanFailure(const RequestTrace& trace, uint8_t status,
+                      const std::string& reason_code,
+                      const std::string& message, const SnapResult* start,
+                      const SnapResult* goal,
+                      std::size_t path_points = 0) const {
+    const double start_x = start && start->found ? start->x : 0.0;
+    const double start_y = start && start->found ? start->y : 0.0;
+    const double start_z = start && start->found ? start->z : 0.0;
+    const double goal_x = goal && goal->found ? goal->x : 0.0;
+    const double goal_y = goal && goal->found ? goal->y : 0.0;
+    const double goal_z = goal && goal->found ? goal->z : 0.0;
+    const double start_distance = start && start->found ? start->distance : 0.0;
+    const double goal_distance = goal && goal->found ? goal->distance : 0.0;
+    MOTION_PLANNER_LOG_ERROR(
+        "event=plan_failed request_id=%llu mission_id=%llu "
+        "planning_attempt=%u trigger=%s trigger_reason=%s status=%u "
+        "status_name=%s mode=%s reason_code=%s start_x=%.3f start_y=%.3f "
+        "start_z=%.3f goal_x=%.3f goal_y=%.3f goal_z=%.3f "
+        "start_snap_distance=%.3f goal_snap_distance=%.3f path_points=%zu "
+        "dynamic_retry_count=%u snapshot_version=%llu duration_ms=%.3f "
+        "message=%s",
+        static_cast<unsigned long long>(trace.request_id),
+        static_cast<unsigned long long>(trace.mission_id),
+        trace.planning_attempt, trace.trigger.c_str(),
+        trace.trigger_reason.c_str(), static_cast<unsigned int>(status),
+        statusName(status), trace.mode.c_str(),
+        normalizeLogToken(reason_code, "unspecified").c_str(), start_x,
+        start_y, start_z, goal_x, goal_y, goal_z, start_distance,
+        goal_distance, path_points, trace.dynamic_retry_count,
+        static_cast<unsigned long long>(trace.dynamic_snapshot_version),
+        elapsedMs(trace), normalizeLogToken(message, "-").c_str());
   }
 
   geometry_msgs::PoseStamped snappedPose(
@@ -460,10 +587,12 @@ class GlobalPctPlannerNode {
                           const nav_msgs::Path* path,
                           const geometry_msgs::PoseStamped* start,
                           const geometry_msgs::PoseStamped* goal,
-                          float start_distance, float goal_distance) const {
+                          float start_distance, float goal_distance,
+                          const std::string& reason_code = "") const {
     PlanPath3DResult output;
     output.status = status;
     output.message = message;
+    output.reason_code = reason_code;
     if (path) output.path = *path;
     if (start) {
       output.has_snapped_start = true;
@@ -478,14 +607,61 @@ class GlobalPctPlannerNode {
     return output;
   }
 
-  void fail(uint8_t status, const std::string& message,
-            const geometry_msgs::PoseStamped* start = nullptr,
-            const geometry_msgs::PoseStamped* goal = nullptr,
-            float start_distance = 0.0f, float goal_distance = 0.0f) {
+  void fail(RequestTrace& trace, uint8_t status,
+            const std::string& reason_code, const std::string& message,
+            const char* phase, const SnapResult* snap_start = nullptr,
+            const SnapResult* snap_goal = nullptr,
+            const geometry_msgs::PoseStamped* snapped_start = nullptr,
+            const geometry_msgs::PoseStamped* snapped_goal = nullptr,
+            std::size_t path_points = 0) {
+    if (std::string(phase) == "planning") {
+      logPlanFailure(trace, status, reason_code, message, snap_start, snap_goal,
+                     path_points);
+    } else {
+      logTerminal(trace, "validation_failed", status, reason_code,
+                  message, phase, path_points);
+    }
+    logTerminal(trace, "goal_aborted", status, reason_code, message, phase,
+                path_points);
+    const float start_distance = snap_start && snap_start->found
+                                     ? snap_start->distance
+                                     : 0.0f;
+    const float goal_distance = snap_goal && snap_goal->found
+                                    ? snap_goal->distance
+                                    : 0.0f;
     const PlanPath3DResult output =
-        result(status, message, nullptr, start, goal, start_distance,
-               goal_distance);
+        result(status, message, nullptr, snapped_start, snapped_goal,
+               start_distance,
+               goal_distance, reason_code);
     action_server_.setAborted(output, message);
+  }
+
+  bool staticPathExists(const PlanPath3DGoalConstPtr& goal) {
+    const std::shared_ptr<const DynamicSnapshot> saved_snapshot =
+        dynamic_enabled_ ? dynamic_layer_->snapshot() : nullptr;
+    core_.clearDynamicSnapshot();
+    bool found = false;
+    try {
+      const SnapResult static_start = core_.snapToTraversable(
+          {static_cast<float>(goal->start.pose.position.x),
+           static_cast<float>(goal->start.pose.position.y),
+           static_cast<float>(goal->start.pose.position.z)},
+          body_height_, endpoint_snap_radius_cells_);
+      const SnapResult static_goal = core_.snapToTraversable(
+          {static_cast<float>(goal->goal.pose.position.x),
+           static_cast<float>(goal->goal.pose.position.y),
+           static_cast<float>(goal->goal.pose.position.z)},
+          body_height_, endpoint_snap_radius_cells_);
+      PlanOutput static_plan;
+      found = static_start.found && static_goal.found &&
+              core_.plan(static_start, static_goal, body_height_, false,
+                         static_plan);
+    } catch (...) {
+      if (saved_snapshot) core_.setDynamicSnapshot(saved_snapshot);
+      throw;
+    }
+    if (saved_snapshot) core_.setDynamicSnapshot(saved_snapshot);
+    return found;
   }
 
   nav_msgs::Path makePath(const PlanOutput& plan,
@@ -515,22 +691,36 @@ class GlobalPctPlannerNode {
   }
 
   void execute(const PlanPath3DGoalConstPtr& goal) {
-    feedback("validating");
+    if (!goal) return;
+    RequestTrace trace;
+    trace.request_id = next_request_id_.fetch_add(1);
+    trace.mission_id = goal->mission_id;
+    trace.planning_attempt = goal->planning_attempt;
+    trace.trigger = normalizeLogToken(goal->trigger, "external");
+    trace.trigger_reason =
+        normalizeLogToken(goal->trigger_reason, "direct_request");
+    trace.mode = optimize_path_ ? "optimized" : "astar";
+    trace.started = ros::WallTime::now();
+    logGoalReceived(trace, goal);
+    feedback(trace, "validating");
     if (goal->start.header.frame_id != navigation_frame_ ||
         goal->goal.header.frame_id != navigation_frame_) {
-      fail(PlanPath3DResult::FRAME_MISMATCH,
-           "start and goal must be expressed in " + navigation_frame_);
+      fail(trace, PlanPath3DResult::FRAME_MISMATCH, "frame_mismatch",
+           "start and goal must be expressed in " + navigation_frame_,
+           "validation");
       return;
     }
     if (!finitePose(goal->start.pose) || !finitePose(goal->goal.pose)) {
-      fail(PlanPath3DResult::INVALID_REQUEST,
-           "poses contain non-finite values");
+      fail(trace, PlanPath3DResult::INVALID_REQUEST, "non_finite_pose",
+           "poses contain non-finite values", "validation");
       return;
     }
     if (action_server_.isPreemptRequested()) {
+      logTerminal(trace, "goal_preempted", PlanPath3DResult::PREEMPTED,
+                  "preempted", "preempted", "validation");
       action_server_.setPreempted(
           result(PlanPath3DResult::PREEMPTED, "preempted", nullptr, nullptr,
-                 nullptr, 0.0f, 0.0f),
+                 nullptr, 0.0f, 0.0f, "preempted"),
           "preempted");
       return;
     }
@@ -545,11 +735,13 @@ class GlobalPctPlannerNode {
                                : 1;
       bool stable = false;
       for (int attempt = 0; attempt < attempts; ++attempt) {
-        feedback("snapping_endpoints");
+        trace.dynamic_retry_count = static_cast<uint32_t>(attempt);
         std::lock_guard<std::mutex> lock(planner_mutex_);
         snapshot = dynamic_enabled_ ? dynamic_layer_->snapshot() : nullptr;
+        trace.dynamic_snapshot_version = snapshot ? snapshot->version : 0;
         if (snapshot) core_.setDynamicSnapshot(snapshot);
         else core_.clearDynamicSnapshot();
+        feedback(trace, "snapping_endpoints");
         start = core_.snapToTraversable(
             {static_cast<float>(goal->start.pose.position.x),
              static_cast<float>(goal->start.pose.position.y),
@@ -560,39 +752,122 @@ class GlobalPctPlannerNode {
              static_cast<float>(goal->goal.pose.position.y),
              static_cast<float>(goal->goal.pose.position.z)},
             body_height_, endpoint_snap_radius_cells_);
+        MOTION_PLANNER_LOG_INFO(
+            "event=endpoints_snapped request_id=%llu mission_id=%llu "
+            "planning_attempt=%u trigger=%s trigger_reason=%s "
+            "start_found=%s goal_found=%s start_layer=%d goal_layer=%d "
+            "start_x=%.3f start_y=%.3f start_z=%.3f goal_x=%.3f "
+            "goal_y=%.3f goal_z=%.3f start_snap_distance=%.3f "
+            "goal_snap_distance=%.3f dynamic_retry_count=%u "
+            "snapshot_version=%llu",
+            static_cast<unsigned long long>(trace.request_id),
+            static_cast<unsigned long long>(trace.mission_id),
+            trace.planning_attempt, trace.trigger.c_str(),
+            trace.trigger_reason.c_str(), start.found ? "true" : "false",
+            end.found ? "true" : "false", start.layer, end.layer, start.x,
+            start.y, start.z, end.x, end.y, end.z,
+            start.found ? start.distance : 0.0f,
+            end.found ? end.distance : 0.0f, trace.dynamic_retry_count,
+            static_cast<unsigned long long>(trace.dynamic_snapshot_version));
         if (!start.found || !end.found) {
-          fail(PlanPath3DResult::NO_TRAVERSABLE_LAYER,
-               "no traversable surface near start or goal");
+          const std::shared_ptr<const DynamicSnapshot> current_snapshot =
+              dynamic_enabled_ ? dynamic_layer_->snapshot() : nullptr;
+          const uint64_t current_version =
+              current_snapshot ? current_snapshot->version : 0;
+          stable = !dynamic_enabled_ ||
+                   (snapshot && current_snapshot &&
+                    current_version == snapshot->version);
+          if (!stable) {
+            if (attempt + 1 < attempts) continue;
+            break;
+          }
+          const bool dynamically_blocked = snapshot && staticPathExists(goal);
+          fail(trace, PlanPath3DResult::NO_TRAVERSABLE_LAYER,
+               dynamically_blocked ? "dynamic_obstacle_blocked"
+                                   : "no_traversable_surface",
+               dynamically_blocked
+                   ? "dynamic obstacles block all traversable endpoints"
+                   : "no traversable surface near start or goal",
+               "planning", &start, &end);
           return;
         }
         const geometry_msgs::PoseStamped snapped_start =
             snappedPose(goal->start, start);
         const geometry_msgs::PoseStamped snapped_goal = snappedPose(goal->goal, end);
-        feedback("planning");
-        if (!core_.plan(start, end, body_height_, optimize_path_, planned)) {
-          fail(PlanPath3DResult::NO_PATH, "PCT did not find a path",
-               &snapped_start, &snapped_goal, start.distance, end.distance);
-          return;
-        }
+        const char* mode = optimize_path_ ? "optimized" : "astar";
+        MOTION_PLANNER_LOG_INFO(
+            "event=plan_started request_id=%llu mission_id=%llu "
+            "planning_attempt=%u trigger=%s trigger_reason=%s mode=%s "
+            "start_x=%.3f start_y=%.3f start_z=%.3f goal_x=%.3f "
+            "goal_y=%.3f goal_z=%.3f start_snap_distance=%.3f "
+            "goal_snap_distance=%.3f dynamic_retry_count=%u "
+            "snapshot_version=%llu",
+            static_cast<unsigned long long>(trace.request_id),
+            static_cast<unsigned long long>(trace.mission_id),
+            trace.planning_attempt, trace.trigger.c_str(),
+            trace.trigger_reason.c_str(), mode, start.x, start.y, start.z,
+            end.x, end.y, end.z, start.distance, end.distance,
+            trace.dynamic_retry_count,
+            static_cast<unsigned long long>(trace.dynamic_snapshot_version));
+        feedback(trace, "planning");
+        const bool plan_found =
+            core_.plan(start, end, body_height_, optimize_path_, planned);
         if (action_server_.isPreemptRequested()) {
+          logTerminal(trace, "goal_preempted", PlanPath3DResult::PREEMPTED,
+                      "preempted", "preempted", "planning", planned.path.size());
           action_server_.setPreempted(
               result(PlanPath3DResult::PREEMPTED, "preempted", nullptr,
                      &snapped_start, &snapped_goal, start.distance,
-                     end.distance),
+                     end.distance, "preempted"),
               "preempted");
           return;
         }
+        const std::shared_ptr<const DynamicSnapshot> current_snapshot =
+            dynamic_enabled_ ? dynamic_layer_->snapshot() : nullptr;
         const uint64_t current_version =
-            dynamic_enabled_ ? dynamic_layer_->snapshot()->version : 0;
-        stable = !dynamic_enabled_ || current_version == snapshot->version;
+            current_snapshot ? current_snapshot->version : 0;
+        stable = !dynamic_enabled_ ||
+                 (snapshot && current_snapshot &&
+                  current_version == snapshot->version);
+        if (!stable) {
+          if (attempt + 1 < attempts) {
+            MOTION_PLANNER_LOG_WARN(
+                "event=plan_retry request_id=%llu mission_id=%llu "
+                "planning_attempt=%u trigger=%s trigger_reason=%s "
+                "reason_code=dynamic_snapshot_changed retry_index=%u "
+                "max_retries=%d previous_snapshot_version=%llu "
+                "current_snapshot_version=%llu duration_ms=%.3f",
+                static_cast<unsigned long long>(trace.request_id),
+                static_cast<unsigned long long>(trace.mission_id),
+                trace.planning_attempt, trace.trigger.c_str(),
+                trace.trigger_reason.c_str(), trace.dynamic_retry_count + 1,
+                std::max(0, max_snapshot_retries_),
+                static_cast<unsigned long long>(trace.dynamic_snapshot_version),
+                static_cast<unsigned long long>(current_version),
+                elapsedMs(trace));
+            continue;
+          }
+          break;
+        }
+        if (!plan_found) {
+          const bool dynamically_blocked = snapshot && staticPathExists(goal);
+          fail(trace, PlanPath3DResult::NO_PATH,
+               dynamically_blocked ? "dynamic_obstacle_blocked"
+                                   : "pct_no_path_static",
+               dynamically_blocked
+                   ? "dynamic obstacles block the global route"
+                   : "PCT did not find a route in the static map",
+               "planning", &start, &end, &snapped_start, &snapped_goal);
+          return;
+        }
         if (stable) {
           // The legacy action server rejects A* results shorter than two
           // points.  This is relevant when start and goal are adjacent and
           // the native A* result contains only the goal cell.
           if (planned.path.size() < 2) {
-            fail(PlanPath3DResult::NO_PATH, "PCT path has fewer than two points",
-                 &snapped_start, &snapped_goal, start.distance,
-                 end.distance);
+            fail(trace, PlanPath3DResult::NO_PATH, "path_too_short",
+                 "PCT path has fewer than two points", "planning", &start,
+                 &end, &snapped_start, &snapped_goal, planned.path.size());
             return;
           }
           nav_msgs::Path path = makePath(planned, goal->goal);
@@ -604,26 +879,43 @@ class GlobalPctPlannerNode {
             path.poses.back().pose.position.y = end.y;
             path.poses.back().pose.position.z = end.z;
           }
-          global_path_publisher_.publish(path);
           const std::string message =
               "ok; start snapped " + std::to_string(start.distance) +
               "m, goal snapped " + std::to_string(end.distance) + "m";
-          feedback("publishing");
+          MOTION_PLANNER_LOG_INFO(
+              "event=plan_succeeded request_id=%llu mission_id=%llu "
+              "planning_attempt=%u trigger=%s trigger_reason=%s mode=%s "
+              "path_points=%zu start_x=%.3f start_y=%.3f start_z=%.3f "
+              "goal_x=%.3f goal_y=%.3f goal_z=%.3f "
+              "start_snap_distance=%.3f goal_snap_distance=%.3f "
+              "dynamic_retry_count=%u snapshot_version=%llu duration_ms=%.3f",
+              static_cast<unsigned long long>(trace.request_id),
+              static_cast<unsigned long long>(trace.mission_id),
+              trace.planning_attempt, trace.trigger.c_str(),
+              trace.trigger_reason.c_str(), mode, path.poses.size(), start.x,
+              start.y, start.z, end.x, end.y, end.z, start.distance,
+              end.distance, trace.dynamic_retry_count,
+              static_cast<unsigned long long>(trace.dynamic_snapshot_version),
+              elapsedMs(trace));
+          feedback(trace, "publishing");
           action_server_.setSucceeded(
-              result(PlanPath3DResult::SUCCESS, message, &path, &snapped_start,
-                     &snapped_goal, start.distance, end.distance),
+              result(PlanPath3DResult::SUCCESS, message, &path,
+                     &snapped_start, &snapped_goal, start.distance,
+                     end.distance, "ok"),
               "path found");
           return;
         }
       }
       if (!stable) {
-        fail(PlanPath3DResult::NO_PATH,
-             "dynamic layer changed during planning; path rejected");
+        fail(trace, PlanPath3DResult::NO_PATH, "dynamic_snapshot_unstable",
+             "dynamic layer changed during planning; path rejected",
+             "planning", &start, &end);
       }
     } catch (const std::exception& exception) {
       MOTION_PLANNER_LOG_ERROR_STREAM("Global PCT planning failed: "
                                       << exception.what());
-      fail(PlanPath3DResult::INTERNAL_ERROR, exception.what());
+      fail(trace, PlanPath3DResult::INTERNAL_ERROR, "internal_error",
+           exception.what(), "planning", &start, &end);
     }
   }
 
@@ -651,9 +943,10 @@ class GlobalPctPlannerNode {
   double dynamic_source_timeout_{0.5};
   ros::WallTime last_dynamic_update_;
   std::mutex planner_mutex_;
+  std::atomic<uint64_t> next_request_id_{1};
 
-  ros::Publisher global_path_publisher_;
   ros::Publisher dynamic_ok_publisher_;
+  ros::Publisher dynamic_enabled_publisher_;
   ros::Publisher dynamic_version_publisher_;
   ros::Publisher dynamic_cloud_publisher_;
   ros::Publisher dynamic_cost_publisher_;
@@ -668,7 +961,7 @@ class GlobalPctPlannerNode {
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "global_pct_planner");
-  motion_planner_log::initialize("global_pct_planner", argv[0]);
+  motion_planner_log::initialize("global_pct_planner", "global_pct_planner", argv[0]);
   try {
     global_pct_planner::GlobalPctPlannerNode node;
     ros::AsyncSpinner spinner(2);

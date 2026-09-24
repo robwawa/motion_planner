@@ -45,7 +45,7 @@ void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& msg) {
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "waypoint_generator");
-  motion_planner_log::initialize("waypoint_generator", argv[0]);
+  motion_planner_log::initialize("scan_planner", "waypoint_generator", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: waypoint generator.");
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");

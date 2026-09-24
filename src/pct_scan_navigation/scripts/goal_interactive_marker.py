@@ -174,7 +174,7 @@ class GoalMarker:
 
 if __name__ == '__main__':
     rospy.init_node('goal_interactive_marker')
-    logger = configure('goal_interactive_marker')
+    logger = configure('pct_scan_navigation', 'goal_interactive_marker')
     GoalMarker()
     logger.info('Ready: interactive goal marker initialized.')
     rospy.spin()

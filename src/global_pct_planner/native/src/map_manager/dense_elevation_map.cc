@@ -1,6 +1,7 @@
 #include "map_manager/dense_elevation_map.h"
 
 #include <cmath>
+#include <stdexcept>
 
 void DenseElevationMap::Init(const double resolution, const int num_layers,
                              const Eigen::MatrixXd& cost_map,
@@ -21,14 +22,56 @@ void DenseElevationMap::Init(const double resolution, const int num_layers,
   ceiling_ = ceiling;
   grad_x_ = grad_x;
   grad_y_ = grad_y;
+  dynamic_cost_.clear();
+  dynamic_cost_enabled_ = false;
+}
 
+void DenseElevationMap::SetDynamicCostMap(const uint8_t* costs,
+                                          std::size_t count,
+                                          uint8_t lethal_cost) {
+  const std::size_t expected = static_cast<std::size_t>(max_layers_) *
+                               static_cast<std::size_t>(max_y_) *
+                               static_cast<std::size_t>(max_x_);
+  if (costs == nullptr && count != 0) {
+    throw std::invalid_argument("dynamic cost pointer is null");
+  }
+  if (count != expected) {
+    throw std::invalid_argument(
+        "dynamic cost map size does not match elevation map");
+  }
+  if (lethal_cost == 0) {
+    throw std::invalid_argument("dynamic lethal cost must be non-zero");
+  }
+  dynamic_cost_.clear();
+  if (count != 0) dynamic_cost_.assign(costs, costs + count);
+  dynamic_lethal_cost_ = lethal_cost;
+  dynamic_cost_enabled_ = true;
+}
+
+void DenseElevationMap::ClearDynamicCostMap() {
+  dynamic_cost_.clear();
+  dynamic_cost_.shrink_to_fit();
+  dynamic_cost_enabled_ = false;
+}
+
+double DenseElevationMap::EffectiveCost(int row, int col) const {
+  const double static_cost = cost_(row, col);
+  if (!dynamic_cost_enabled_) return static_cost;
+  const std::size_t index = static_cast<std::size_t>(row) *
+                                static_cast<std::size_t>(max_x_) +
+                            static_cast<std::size_t>(col);
+  const double dynamic_cost = static_cast<double>(dynamic_cost_[index]);
+  // A zero dynamic layer is explicitly a no-op, preserving the legacy static
+  // query even for diagnostic maps that contain a negative sentinel cost.
+  return dynamic_cost == 0.0 ? static_cost
+                             : std::max(static_cost, dynamic_cost);
 }
 
 double DenseElevationMap::GetRealCost(int layer, double x, double y,
                                       Eigen::Vector2d* grad, int* new_layer) {
   const int col = index(x);
   int row = index(y) + layer * max_y_;
-  double cost = cost_(row, col);
+  double cost = EffectiveCost(row, col);
 
   // * grid that is unlikely to be the border between different layers
   if (cost < safe_cost_threshold_) {
@@ -47,7 +90,7 @@ double DenseElevationMap::GetRealCost(int layer, double x, double y,
     int lower_row = row - max_y_;
     double lower_height = height_(lower_row, col);
     if (abs(this_height - lower_height) < resolution_) {
-      double lower_cost = cost_(lower_row, col);
+      double lower_cost = EffectiveCost(lower_row, col);
       if (lower_cost < cost) {
         cost = lower_cost;
         real_row = lower_row;
@@ -60,7 +103,7 @@ double DenseElevationMap::GetRealCost(int layer, double x, double y,
     int upper_row = row + max_y_;
     double upper_height = height_(upper_row, col);
     if (abs(this_height - upper_height) < resolution_) {
-      double upper_cost = cost_(upper_row, col);
+      double upper_cost = EffectiveCost(upper_row, col);
       if (upper_cost < cost) {
         cost = upper_cost;
         real_row = upper_row;
@@ -82,14 +125,15 @@ double DenseElevationMap::GetRealCost(int layer, double x, double y,
 double DenseElevationMap::GetRealCostSafe(int layer, double x, double y,
                                           const double height_hint) {
   int real_layer = UpdateLayerSafe(layer, x, y, height_hint);
-  return cost_(index_y_safe(y) + real_layer * max_y_, index_x_safe(x));
+  return EffectiveCost(index_y_safe(y) + real_layer * max_y_,
+                       index_x_safe(x));
 }
 
 int DenseElevationMap::UpdateLayer(const int layer, const double x,
                                    const double y) {
   const int col = index(x);
   int row = index(y) + layer * max_y_;
-  double cost = cost_(row, col);
+  double cost = EffectiveCost(row, col);
   int real_layer = layer;
   double lower_cost = 99;
   double upper_cost = 99;
@@ -108,7 +152,7 @@ int DenseElevationMap::UpdateLayer(const int layer, const double x,
     int lower_row = row - max_y_;
     lower_height = height_(lower_row, col);
     if (abs(this_height - lower_height) < resolution_ || this_height < -50) {
-      lower_cost = cost_(row - max_y_, col);
+      lower_cost = EffectiveCost(row - max_y_, col);
       if (lower_cost + offset_ < cost) {
         real_layer = layer - 1;
         cost = lower_cost;
@@ -120,7 +164,7 @@ int DenseElevationMap::UpdateLayer(const int layer, const double x,
     int upper_row = row + max_y_;
     upper_height = height_(upper_row, col);
     if (abs(this_height - upper_height) < resolution_ || this_height < -50) {
-      upper_cost = cost_(row + max_y_, col);
+      upper_cost = EffectiveCost(row + max_y_, col);
       if (upper_cost + offset_ < cost) {
         real_layer = layer + 1;
       }
@@ -228,7 +272,7 @@ int DenseElevationMap::UpdateLayerSafe(const int layer, const double x,
                                        const double height_hint) {
   const int col = index_x_safe(x);
   int row = index_y_safe(y) + layer * max_y_;
-  double cost = cost_(row, col);
+  double cost = EffectiveCost(row, col);
   int real_layer = layer;
   double this_height = GetHeight(layer, x, y);
   bool unsafe_grid =
@@ -250,7 +294,7 @@ int DenseElevationMap::UpdateLayerSafe(const int layer, const double x,
 
   if (layer > 0) {
     lower_height = height_(row - max_y_, col);
-    lower_cost = cost_(row - max_y_, col);
+    lower_cost = EffectiveCost(row - max_y_, col);
     // * filter out jump down scenario
     if (abs(height_hint - lower_height) < 5 * resolution_) {
       if ((abs(this_height - lower_height) < 1.5 * resolution_ &&
@@ -264,7 +308,7 @@ int DenseElevationMap::UpdateLayerSafe(const int layer, const double x,
 
   if (layer < max_layers_ - 1) {
     upper_height = height_(row + max_y_, col);
-    upper_cost = cost_(row + max_y_, col);
+    upper_cost = EffectiveCost(row + max_y_, col);
     if (abs(height_hint - upper_height) < 5 * resolution_) {
       if ((abs(this_height - upper_height) < 1.5 * resolution_ &&
            upper_cost < cost) ||

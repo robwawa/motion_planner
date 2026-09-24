@@ -9,7 +9,7 @@ using namespace scan_planner;
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "scan_planner_node");
-  motion_planner_log::initialize("scan_planner_node", argv[0]);
+  motion_planner_log::initialize("scan_planner", "scan_planner_node", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: scan planner.");
   ros::NodeHandle nh("~");
 

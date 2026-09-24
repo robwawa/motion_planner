@@ -10,10 +10,10 @@
   <arg name="body_height" default="0.315" />
   <arg name="controller_mode" default="mpc" />
   <arg name="reference_path_mode" default="polyline_rolling_window" />
-  <arg name="tomogram_name" default="building2_9_clean03.pcd" />
+  <arg name="tomogram_name" default="building2_9.pcd" />
   <arg name="tomogram_dir"
        default="$(arg global_pct_source_path)/rsc/tomogram" />
-  <arg name="pcd_map_file" default="$(arg global_pct_source_path)/rsc/pcd/building2_9_clean03.pcd" />
+  <arg name="pcd_map_file" default="$(arg global_pct_source_path)/rsc/pcd/building2_9.pcd" />
   <!-- Runs only the independent perception module; it does not alter the
        existing planner dynamic-cloud input or replanning behavior. -->
   <arg name="enable_dynamic_perception" default="true" />
@@ -68,7 +68,8 @@
     <arg name="init_z" value="$(arg body_height)" />
   </include>
 
-  <include file="$(find pct_scan_navigation)/launch/navigation.launch">
+  <include file="$(find navigation_supervisor)/launch/navigation_supervisor.launch">
+    <arg name="launch_planners" value="false" />
     <arg name="body_pose_topic" value="/Odometry_gazebo" />
     <arg name="default_goal_z" value="$(arg body_height)" />
   </include>

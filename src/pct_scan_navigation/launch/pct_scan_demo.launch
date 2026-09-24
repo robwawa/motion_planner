@@ -65,7 +65,8 @@
     <arg name="init_z" value="2.804" />
   </include>
 
-  <include file="$(find pct_scan_navigation)/launch/navigation.launch">
+  <include file="$(find navigation_supervisor)/launch/navigation_supervisor.launch">
+    <arg name="launch_planners" value="false" />
     <arg name="body_pose_topic" value="/quad_0/body_pose" />
   </include>
 </launch>

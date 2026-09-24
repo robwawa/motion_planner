@@ -44,7 +44,7 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     char **argv = nullptr;
     auto curr_scan_topic = sdf->Get<std::string>("ros_topic");
     if (!ros::isInitialized()) ros::init(argc, argv, curr_scan_topic);
-    motion_planner_log::initialize("pct_scan_gazebo_livox");
+    motion_planner_log::initialize("pct_scan_gazebo", "pct_scan_gazebo_livox", nullptr);
 
     std::vector<std::vector<double>> datas;
     // std::string file_name = sdf->Get<std::string>("csv_file_name");

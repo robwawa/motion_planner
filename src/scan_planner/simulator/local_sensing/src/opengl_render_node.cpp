@@ -906,7 +906,7 @@ void renderSensedPoints(const ros::TimerEvent &event) {
 
 int main(int argc, char **argv) {
   ros::init(argc, argv, "pcl_render");
-  motion_planner_log::initialize("opengl_render_node", argv[0]);
+  motion_planner_log::initialize("scan_planner", "opengl_render_node", argv[0]);
   MOTION_PLANNER_LOG_INFO("Node starting: OpenGL renderer.");
   ros::NodeHandle nh("~");
 

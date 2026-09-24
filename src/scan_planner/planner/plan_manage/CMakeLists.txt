@@ -18,10 +18,10 @@ find_package(OpenMP REQUIRED)
 
 # 小型子模块已取消 ROS 包边界，以下依赖由 scan_planner 统一声明。
 find_package(catkin REQUIRED COMPONENTS
-  roscpp rospy roslib
+  actionlib roscpp rospy roslib
   std_msgs geometry_msgs nav_msgs sensor_msgs visualization_msgs tf
   message_filters cv_bridge pcl_ros pcl_conversions
-  message_generation motion_planner_log global_pct_planner)
+  message_generation motion_planner_log global_pct_planner navigation_msgs)
 
 # GPU 依赖仅在启用 GPU 渲染器时检查。
 if(USE_GPU)
@@ -48,7 +48,7 @@ catkin_package(
   LIBRARIES plan_env path_searching bspline_opt traj_utils pose_utils
   CATKIN_DEPENDS roscpp rospy roslib std_msgs geometry_msgs nav_msgs sensor_msgs
     visualization_msgs tf message_filters cv_bridge pcl_ros pcl_conversions
-    motion_planner_log global_pct_planner message_runtime
+    motion_planner_log global_pct_planner navigation_msgs message_runtime
   DEPENDS EIGEN3 PCL OpenCV Boost)
 
 # 保留原目录结构的 include 路径，同时加入 local_sensing 的第三方头文件路径。

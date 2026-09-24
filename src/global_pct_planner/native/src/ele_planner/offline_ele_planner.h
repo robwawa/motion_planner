@@ -30,8 +30,12 @@ class OfflineElePlanner {
   void SetDynamicCostMap(const uint8_t* costs, size_t count,
                          uint8_t lethal_cost) {
     path_finder_.SetDynamicCostMap(costs, count, lethal_cost);
+    if (map_) map_->SetDynamicCostMap(costs, count, lethal_cost);
   }
-  void ClearDynamicCostMap() { path_finder_.ClearDynamicCostMap(); }
+  void ClearDynamicCostMap() {
+    path_finder_.ClearDynamicCostMap();
+    if (map_) map_->ClearDynamicCostMap();
+  }
   std::vector<uint8_t> GetDynamicCosts(
       const std::vector<size_t>& flat_indices) const {
     return path_finder_.GetDynamicCosts(flat_indices);

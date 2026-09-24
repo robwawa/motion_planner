@@ -7,26 +7,41 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
-#include <fstream>
+#include <fcntl.h>
 #include <iomanip>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 namespace motion_planner_log {
 namespace {
 
-constexpr const char* kFunctionMarker = "\x1fMOTION_PLANNER_FUNCTION\x1f";
-constexpr const char* kMessageMarker = "\x1fMOTION_PLANNER_MESSAGE\x1f";
+thread_local const char* active_function = nullptr;
+
+class ScopedFunctionContext {
+ public:
+  explicit ScopedFunctionContext(const char* function)
+      : previous_(active_function) {
+    active_function = function;
+  }
+
+  ~ScopedFunctionContext() { active_function = previous_; }
+
+ private:
+  const char* previous_;
+};
 
 struct State {
   std::mutex mutex;
+  std::string package;
   std::string module;
   std::string root;
   std::unique_ptr<google::LogSink> sink;
-  std::ofstream sink_file;
   std::string current_file;
   bool initialized = false;
   bool to_console = false;
@@ -126,18 +141,8 @@ class FileSink final : public google::LogSink {
   void send(google::LogSeverity severity, const char* full_filename,
             const char* base_filename, int line, const tm* tm_time,
             const char* message, std::size_t message_len) override {
-    std::string function;
-    std::string body(message, message_len);
-    const std::string function_marker(kFunctionMarker);
-    const std::string message_marker(kMessageMarker);
-    const std::size_t function_begin = body.find(function_marker);
-    const std::size_t message_begin = body.find(message_marker);
-    if (function_begin != std::string::npos && message_begin != std::string::npos &&
-        message_begin > function_begin) {
-      function = body.substr(function_begin + function_marker.size(),
-                             message_begin - function_begin - function_marker.size());
-      body = body.substr(message_begin + message_marker.size());
-    }
+    const std::string function = active_function ? active_function : "";
+    const std::string body(message, message_len);
 
     const char* source = base_filename && *base_filename ? base_filename : full_filename;
     std::string source_name = source ? source : "unknown";
@@ -154,27 +159,47 @@ class FileSink final : public google::LogSink {
 
     std::lock_guard<std::mutex> lock(state_->mutex);
     const std::string current_date = date_string(tm_time);
-    const std::string expected_file = state_->root + "/" + state_->module + "/" + current_date + ".log";
-    if (expected_file != state_->current_file) {
-      state_->sink_file.close();
-      state_->current_file = expected_file;
-      state_->sink_file.open(state_->current_file, std::ios::out | std::ios::app);
+    const std::string package_dir = state_->root + "/" + state_->package;
+    const std::string expected_file = package_dir + "/" + current_date + ".log";
+    const std::string lock_file = package_dir + "/.lock";
+    state_->current_file = expected_file;
+
+    const int lock_fd = ::open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
+    if (lock_fd >= 0) {
+      ::flock(lock_fd, LOCK_EX);
     }
+
     if (state_->to_console) {
       std::fwrite(output.data(), 1, output.size(), stderr);
       std::fflush(stderr);
     }
-    if (state_->sink_file.is_open()) {
-      if (state_->max_bytes > 0 && state_->sink_file.tellp() >= static_cast<std::streamoff>(state_->max_bytes)) {
-        state_->sink_file.close();
-        const std::string rotated = state_->current_file + ".1";
-        std::remove(rotated.c_str());
-        std::rename(state_->current_file.c_str(), rotated.c_str());
-        state_->sink_file.open(state_->current_file, std::ios::out | std::ios::trunc);
-      }
-      state_->sink_file << output;
-      state_->sink_file.flush();
+
+    struct stat file_stat = {};
+    if (state_->max_bytes > 0 && ::stat(expected_file.c_str(), &file_stat) == 0 &&
+        static_cast<std::size_t>(file_stat.st_size) >= state_->max_bytes) {
+      const std::string rotated = expected_file + ".1";
+      std::remove(rotated.c_str());
+      std::rename(expected_file.c_str(), rotated.c_str());
     }
+
+    const int output_fd = ::open(expected_file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (output_fd >= 0) {
+      const char* data = output.data();
+      std::size_t remaining = output.size();
+      while (remaining > 0) {
+        const ssize_t written = ::write(output_fd, data, remaining);
+        if (written <= 0) break;
+        data += written;
+        remaining -= static_cast<std::size_t>(written);
+      }
+      ::close(output_fd);
+    }
+
+    if (lock_fd >= 0) {
+      ::flock(lock_fd, LOCK_UN);
+      ::close(lock_fd);
+    }
+
     if (state_->to_rosout && severity >= google::GLOG_WARNING && ros::isInitialized()) {
       ros::console::initialize();
       ros::console::Level ros_level = ros::console::levels::Warn;
@@ -191,22 +216,25 @@ class FileSink final : public google::LogSink {
 
 }  // namespace
 
-void initialize(const std::string& module_name, const char* argv0) {
+void initialize(const std::string& package_name,
+                const std::string& module_name,
+                const char* argv0) {
   State& base = state();
   std::lock_guard<std::mutex> lock(base.mutex);
   if (base.initialized) return;
 
+  base.package = package_name;
   base.module = module_name;
   base.root = env_string("MOTION_PLANNER_LOG_DIR", default_log_dir());
   base.to_console = env_bool("MOTION_PLANNER_LOG_TO_CONSOLE", false);
   base.to_rosout = env_bool("MOTION_PLANNER_LOG_ROSOUT", false);
   base.max_bytes = env_size("MOTION_PLANNER_LOG_MAX_MB");
 
-  const std::string module_dir = base.root + "/" + module_name;
-  mkdir_recursive(module_dir);
+  const std::string package_dir = base.root + "/" + package_name;
+  mkdir_recursive(package_dir);
   const std::time_t now = std::time(nullptr);
   const tm* local = std::localtime(&now);
-  const std::string file = module_dir + "/" + date_string(local) + ".log";
+  const std::string file = package_dir + "/" + date_string(local) + ".log";
 
   google::InitGoogleLogging(argv0 ? argv0 : module_name.c_str());
   google::SetLogDestination(google::GLOG_INFO, "");
@@ -215,13 +243,14 @@ void initialize(const std::string& module_name, const char* argv0) {
   google::SetLogDestination(google::GLOG_FATAL, "");
 
   base.current_file = file;
-  base.sink_file.open(file, std::ios::out | std::ios::app);
-  if (!base.sink_file.is_open()) {
+  const int probe_fd = ::open(file.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+  if (probe_fd < 0) {
     base.root = home_dir() + "/.ros/log/motion_planner";
-    const std::string fallback_dir = base.root + "/" + module_name;
+    const std::string fallback_dir = base.root + "/" + package_name;
     mkdir_recursive(fallback_dir);
     base.current_file = fallback_dir + "/" + date_string(local) + ".log";
-    base.sink_file.open(base.current_file, std::ios::out | std::ios::app);
+  } else {
+    ::close(probe_fd);
   }
   base.sink = std::make_unique<FileSink>(&base);
   google::AddLogSink(base.sink.get());
@@ -239,6 +268,10 @@ void initialize(const std::string& module_name, const char* argv0) {
   base.initialized = true;
 }
 
+void initialize(const std::string& module_name, const char* argv0) {
+  initialize(module_name, module_name, argv0);
+}
+
 bool is_initialized() { return state().initialized; }
 
 void log_printf(google::LogSeverity severity, const char* file, int line,
@@ -248,14 +281,14 @@ void log_printf(google::LogSeverity severity, const char* file, int line,
   va_start(args, format);
   std::vsnprintf(buffer, sizeof(buffer), format, args);
   va_end(args);
-  google::LogMessage(file, line, severity).stream()
-      << kFunctionMarker << (function ? function : "") << kMessageMarker << buffer;
+  ScopedFunctionContext function_context(function);
+  google::LogMessage(file, line, severity).stream() << buffer;
 }
 
 void log_stream(google::LogSeverity severity, const char* file, int line,
                 const char* function, const std::string& message) {
-  google::LogMessage(file, line, severity).stream()
-      << kFunctionMarker << (function ? function : "") << kMessageMarker << message;
+  ScopedFunctionContext function_context(function);
+  google::LogMessage(file, line, severity).stream() << message;
 }
 
 }  // namespace motion_planner_log

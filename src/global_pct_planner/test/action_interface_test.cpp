@@ -28,6 +28,39 @@ TEST(ActionInterface, ResultCarriesSnappedEndpointState) {
   EXPECT_DOUBLE_EQ(0.5, result.snapped_goal_distance);
 }
 
+TEST(ActionInterface, GoalCarriesMissionPlanningContext) {
+  PlanPath3DGoal goal;
+  EXPECT_EQ(0u, goal.mission_id);
+  EXPECT_EQ(0u, goal.planning_attempt);
+  EXPECT_TRUE(goal.trigger.empty());
+  EXPECT_TRUE(goal.trigger_reason.empty());
+
+  goal.mission_id = 42;
+  goal.planning_attempt = 3;
+  goal.trigger = "local_replan";
+  goal.trigger_reason = "local_replan_budget_exhausted";
+  EXPECT_EQ(42u, goal.mission_id);
+  EXPECT_EQ(3u, goal.planning_attempt);
+  EXPECT_EQ("local_replan", goal.trigger);
+  EXPECT_EQ("local_replan_budget_exhausted", goal.trigger_reason);
+}
+
+TEST(ActionInterface, FeedbackCarriesPlannerTraceContext) {
+  PlanPath3DFeedback feedback;
+  feedback.request_id = 17;
+  feedback.mission_id = 42;
+  feedback.planning_attempt = 3;
+  feedback.dynamic_retry_count = 1;
+  feedback.dynamic_snapshot_version = 9;
+  feedback.stage = "planning";
+  EXPECT_EQ(17u, feedback.request_id);
+  EXPECT_EQ(42u, feedback.mission_id);
+  EXPECT_EQ(3u, feedback.planning_attempt);
+  EXPECT_EQ(1u, feedback.dynamic_retry_count);
+  EXPECT_EQ(9u, feedback.dynamic_snapshot_version);
+  EXPECT_EQ("planning", feedback.stage);
+}
+
 }  // namespace global_pct_planner
 
 int main(int argc, char** argv) {
